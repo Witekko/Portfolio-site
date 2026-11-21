@@ -111,7 +111,7 @@ async function init() {
   const CAM_Z = 6, FOV = 35;
   camera.position.z = CAM_Z;
 
-  const [photo, depth] = await Promise.all([loadImage('../../assets/JA.png'), loadImage('../../assets/JA-depth.png')]);
+  const [photo, depth] = await Promise.all([loadImage('./assets/JA.png'), loadImage('./assets/JA-depth.png')]);
 
   const sig = F.signature(N);
   const formations = [
@@ -336,6 +336,7 @@ async function init() {
     if (el.dataset.demo) add(el.dataset.demo, 'Open live demo', true);
     if (el.dataset.pdf) add(el.dataset.pdf, 'Read the thesis (PDF)', true);
     if (el.dataset.repo) add(el.dataset.repo, 'Code on GitHub', !el.dataset.demo && !el.dataset.pdf);
+    if (el.dataset.legacy) add(el.dataset.legacy, 'See the first version', false);
     inspectFocus = document.activeElement;
     inspectScrollY = scrollY;
     inspectPanel.scrollTop = 0;
