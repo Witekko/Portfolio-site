@@ -1,2 +1,1 @@
-# Portfolio-site
-Capstone project portfolio site
+porfolio capctone
