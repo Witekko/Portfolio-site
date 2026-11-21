@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Witold Korzeniewski — Robotics → Machine Learning</title>
+  <meta name="description" content="Automation & Robotics engineer and data analyst moving into machine learning.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Mrs+Saint+Delafield&display=swap" rel="stylesheet">
+  <link rel="preload" as="image" href="../../assets/JA.png">
+  <link rel="stylesheet" href="./style.css">
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <canvas id="gl" aria-hidden="true"></canvas>
+
+  <header class="nav">
+    <a class="brand mono" href="#top" aria-label="Witold Korzeniewski — home">wk<span>_</span></a>
+    <nav aria-label="Main">
+      <a href="#projects">Projects</a>
+      <a href="https://github.com/Witekko/" rel="noopener">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top" data-enter>
+      <div class="hero-copy">
+        <p class="eyebrow mono">Automation &amp; Robotics <span class="arrow">→</span> Data <span class="arrow">→</span> Machine Learning</p>
+        <h1>Witold<br>Korzeniewski</h1>
+        <p class="lede">
+          Robotics engineer turned data analyst, now building toward machine learning.
+          The portrait on this page is generated live in your browser from my signature, the way an image-to-image model turns a sketch into a picture.
+        </p>
+        <div class="actions">
+          <a class="btn btn-primary" href="#projects">See my projects</a>
+          <a class="btn btn-ghost" href="https://www.linkedin.com/in/witold-korzeniewski-64a56b27b/" rel="noopener">LinkedIn</a>
+        </div>
+      </div>
+
+      <!-- Static portrait: shown when WebGL is unavailable -->
+      <img class="fallback" src="../../assets/JA.png" width="1188" height="1324" alt="Portrait of Witold Korzeniewski">
+
+      <aside class="hud mono" aria-label="Sampler status">
+        <div class="hud-head">
+          <span class="dot" aria-hidden="true"></span>
+          <span id="hud-proc">loading condition…</span>
+        </div>
+        <dl>
+          <div><dt>step</dt><dd><b id="hud-step">0</b>/50</dd></div>
+          <div><dt>strength</dt><dd id="hud-strength">0.00</dd></div>
+          <div class="wide"><dt>condition</dt><dd id="hud-cond">signature</dd></div>
+        </dl>
+        <div class="bar" aria-hidden="true"><i id="hud-bar"></i></div>
+        <p class="prompt">prompt: <span>"engineer, glasses, smiling"</span></p>
+        <button type="button" class="resample" id="resample">↻ Replay</button>
+      </aside>
+
+      <p class="scroll-hint mono" aria-hidden="true">scroll ↓ the portrait returns to the signature</p>
+    </section>
+
+    <section class="next" id="projects">
+      <p class="eyebrow mono">next prototype</p>
+      <h2>Projects, delivered by a robot arm</h2>
+      <p>Placeholder for the second scene. Scroll back up to watch the portrait denoise again.</p>
+    </section>
+  </main>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

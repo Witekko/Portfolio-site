@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Witold Korzeniewski — Robotics → Machine Learning</title>
+  <meta name="description" content="Automation & Robotics engineer and data analyst moving into machine learning. Portfolio of projects.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="preload" as="image" href="../../assets/JA.png">
+  <link rel="preload" as="image" href="../../assets/JA-depth.png">
+  <link rel="stylesheet" href="./style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <!-- Project cards live here as real HTML, placed in 3D under the WebGL canvas -->
+  <div id="css3d" aria-hidden="true"></div>
+  <canvas id="gl" aria-hidden="true"></canvas>
+
+  <header class="nav">
+    <a class="brand mono" href="#top" aria-label="Witold Korzeniewski — home">wk<span>_</span></a>
+    <nav aria-label="Main">
+      <a href="#about" data-open-about>About</a>
+      <a href="#projects">Projects</a>
+      <a href="#contact">Contact</a>
+    </nav>
+  </header>
+
+  <!-- Section rail: where you are in the story -->
+  <nav class="rail" aria-label="Sections">
+    <a href="#top" data-rail="0"><span>Intro</span></a>
+    <a href="#p-ike" data-rail="1"><span>IKE Tracker</span></a>
+    <a href="#p-thesis" data-rail="2"><span>Master's thesis</span></a>
+    <a href="#p-sigma" data-rail="3"><span>Age of Sigma</span></a>
+    <a href="#p-dance" data-rail="4"><span>Dance Game</span></a>
+    <a href="#p-line" data-rail="5"><span>Line Follower</span></a>
+    <a href="#p-ttt" data-rail="6"><span>Tic-Tac-Toe</span></a>
+    <a href="#p-site" data-rail="7"><span>This website</span></a>
+    <a href="#contact" data-rail="8"><span>Contact</span></a>
+  </nav>
+
+  <main id="main">
+    <!-- 0 · Hero -->
+    <section class="hero scene" id="top" data-enter>
+      <div class="copy">
+        <p class="eyebrow mono">Automation &amp; Robotics <span class="hot">→</span> Data <span class="hot">→</span> Machine Learning</p>
+        <h1>Witold<br>Korzeniewski</h1>
+        <p class="lede">
+          Robotics engineer turned data analyst, now building toward machine learning.
+          The head on this page started as my signature and was rebuilt in 3D from a single photo by a depth-estimation model.
+        </p>
+        <div class="actions">
+          <button type="button" class="btn btn-primary" data-open-about>Meet me</button>
+          <a class="btn btn-ghost" href="#projects">See projects</a>
+        </div>
+      </div>
+      <img class="fallback" src="../../assets/JA.png" width="1188" height="1324" alt="Portrait of Witold Korzeniewski">
+      <p class="hint mono" id="hint" aria-hidden="true"><span class="dot"></span><span id="hint-text">writing signature…</span></p>
+    </section>
+
+    <!-- Projects: a robot arm hands over each card; the particles shape each project in the back -->
+    <div id="projects">
+      <section class="scene project" id="p-ike" data-media="../../assets/video/ike-tracker.mp4" data-poster="../../assets/video/ike-tracker.jpg" data-demo="https://ike-tracker.onrender.com/" data-repo="https://github.com/Witekko/IKEchecker">
+        <div class="copy">
+          <p class="index mono">01 <span>/ 07</span></p>
+          <h2>IKE Tracker</h2>
+          <p class="desc">The investment tracker I’m proudest of, and one I use every day.</p>
+        </div>
+        <!-- Shown in the side panel when the card is clicked -->
+        <template class="details">
+          <p class="context mono">Personal project · in daily use</p>
+          <p>The project I’m proudest of, and one I open every day. It reads my broker statements from XTB, tracks the portfolio on profit-and-loss charts, works out the tax I would owe and how much my IKE (a Polish tax-sheltered retirement account) saves me, pulls news for every company I hold and computes a stack of financial ratios.</p>
+          <ul class="tags mono"><li>Django</li><li>PostgreSQL</li><li>Statement parsing</li><li>Finance</li></ul>
+        </template>
+      </section>
+
+      <section class="scene project" id="p-thesis" data-card="card-thesis" data-pdf="../../assets/docs/thesis-g2-esports.pdf">
+        <div class="copy">
+          <p class="index mono">02 <span>/ 07</span></p>
+          <h2>Master’s thesis: G2 Esports</h2>
+          <p class="desc">A data-driven look at how an esports team should run its channels.</p>
+        </div>
+        <!-- Shown in the side panel when the card is clicked -->
+        <template class="details">
+          <p class="context mono">Master’s thesis · Wrocław University of Economics and Business · 2025</p>
+          <p><em>Analysis of the Marketing Strategy Applied by G2 Esports</em> (original title: <em lang="pl">Analiza strategii marketingowej stosowanej przez organizację G2 Esports</em>). It argues that esports marketing works best on three pillars: a steady publishing cadence, bridges from short to long formats, and light localisation without splitting channels.</p>
+          <p>Two data streams: a 30-day benchmark of G2 and comparable organisations on X, Instagram, TikTok and YouTube (plus a yearly YouTube trend), and a survey of 50 Polish viewers of G2 content. Seven composite indices (EDI, PQP, LWI, GO, GAI, CTR, PMI) link the supply side with the demand side, tested with Spearman rank correlations and Benjamini–Hochberg correction.</p>
+          <p>A steady weekly rhythm, a structured “match package” and simple localisation (captions, playlists, time cues for EMEA/PL viewers) went together with subscription intent and engagement, while attachment to the brand explained willingness to support better than how often people see the content.</p>
+          <ul class="tags mono"><li>Data analysis</li><li>Survey · N = 50</li><li>Spearman + BH</li><li>Marketing</li></ul>
+        </template>
+      </section>
+
+      <section class="scene project" id="p-sigma" data-media="../../assets/video/age-of-sigma.mp4" data-poster="../../assets/video/age-of-sigma.jpg" data-repo="https://github.com/Witekko/AgeOfWar">
+        <div class="copy">
+          <p class="index mono">03 <span>/ 07</span></p>
+          <h2>Age of Sigma</h2>
+          <p class="desc">My hand-made remake of the cult Flash game Age of War.</p>
+        </div>
+        <!-- Shown in the side panel when the card is clicked -->
+        <template class="details">
+          <p class="context mono">Personal project · my first game</p>
+          <p>My own remake of the cult Flash game Age of War, and my first real taste of game development. I learned C# from zero in Unity. AI tools were far weaker back then and agents couldn’t hold the context of a game, so most of it is written by hand. It took many evenings, and one day it may get a full release.</p>
+          <ul class="tags mono"><li>Unity</li><li>C#</li><li>Game dev</li></ul>
+        </template>
+      </section>
+
+      <section class="scene project" id="p-dance" data-media="../../assets/video/dance-game.mp4" data-poster="../../assets/video/dance-game.jpg" data-repo="https://github.com/Witekko/Dancegame">
+        <div class="copy">
+          <p class="index mono">04 <span>/ 07</span></p>
+          <h2>Dance Game</h2>
+          <p class="desc">A rhythm game you play with a gyroscope instead of a keyboard.</p>
+        </div>
+        <!-- Shown in the side panel when the card is clicked -->
+        <template class="details">
+          <p class="context mono">Studies × hobby · Automation &amp; Robotics</p>
+          <p>An attempt to join a hobby with my studies: a rhythm game in the spirit of Dance Dance Revolution, built around sensors and a gyroscope. I bent Qt and C++ into a game engine, and since Automation &amp; Robotics left little free time, I drew the animations by hand, at night.</p>
+          <ul class="tags mono"><li>C++</li><li>Qt</li><li>Arduino</li><li>Gyroscope</li></ul>
+        </template>
+      </section>
+
+      <section class="scene project" id="p-line" data-media="../../assets/video/line-follower.mp4" data-poster="../../assets/video/line-follower.jpg">
+        <div class="copy">
+          <p class="index mono">05 <span>/ 07</span></p>
+          <h2>Line Follower</h2>
+          <p class="desc">A cardboard robot that follows a line, built on a student budget.</p>
+        </div>
+        <!-- Shown in the side panel when the card is clicked -->
+        <template class="details">
+          <p class="context mono">University project · Automation &amp; Robotics</p>
+          <p>Where programming met robotics. Sensors that refused to see the line, a chassis made of cardboard because a student budget is a student budget, and in the end a robot that kept to its track.</p>
+          <ul class="tags mono"><li>Robotics</li><li>Sensors</li><li>Control</li></ul>
+        </template>
+      </section>
+
+      <section class="scene project" id="p-ttt" data-media="../../assets/video/tic-tac-toe.mp4" data-poster="../../assets/video/tic-tac-toe.jpg">
+        <div class="copy">
+          <p class="index mono">06 <span>/ 07</span></p>
+          <h2>Tic-Tac-Toe</h2>
+          <p class="desc">My first algorithm: a minimax opponent, scaled up to 10×10.</p>
+        </div>
+        <!-- Shown in the side panel when the card is clicked -->
+        <template class="details">
+          <p class="context mono">First algorithms project</p>
+          <p>It looks like a joke today, but it was my first real contact with algorithms: a minimax opponent, scaled from the classic 3×3 board all the way up to 10×10.</p>
+          <ul class="tags mono"><li>Minimax</li><li>Algorithms</li><li>Game AI</li></ul>
+        </template>
+      </section>
+
+      <section class="scene project" id="p-site" data-media="../../assets/site-preview.jpg" data-repo="https://github.com/Witekko/Portfolio-site">
+        <div class="copy">
+          <p class="index mono">07 <span>/ 07</span></p>
+          <h2>This website</h2>
+          <p class="desc">From a Bootstrap template to a robot that hands you projects.</p>
+        </div>
+        <!-- Shown in the side panel when the card is clicked -->
+        <template class="details">
+          <p class="context mono">Ongoing · several iterations</p>
+          <p>It has been through several versions, from a simple Bootstrap portfolio like many others to what you see now. It shows how I grow along with the technology: a signature that becomes a 3D head through a depth model, and a robot arm solved with inverse kinematics.</p>
+          <ul class="tags mono"><li>Three.js</li><li>GLSL</li><li>Inverse kinematics</li><li>Depth Anything V2</li></ul>
+        </template>
+      </section>
+    </div>
+
+    <!-- Contact: the robot signs -->
+    <section class="scene contact" id="contact">
+      <div class="copy">
+        <p class="eyebrow mono">Contact</p>
+        <h2>Let's build something.</h2>
+        <p class="desc">Open to data, ML and robotics work. The fastest way to reach me is LinkedIn.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="https://www.linkedin.com/in/witold-korzeniewski-64a56b27b/" rel="noopener">Message me on LinkedIn</a>
+          <a class="btn btn-ghost" href="https://github.com/Witekko/" rel="noopener">GitHub</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- About: opened by clicking the face -->
+  <section class="about" id="about" role="dialog" aria-modal="true" aria-labelledby="about-title" hidden>
+    <div class="about-panel">
+      <button type="button" class="about-close mono" id="about-close">← Back <kbd>Esc</kbd></button>
+      <p class="eyebrow mono">About me</p>
+      <h2 id="about-title">From robots to models</h2>
+      <ol class="path">
+        <li>
+          <span class="mono">01</span>
+          <div><h3>Automation &amp; Robotics</h3><p>Engineering degree, Wrocław University of Science and Technology.</p></div>
+        </li>
+        <li>
+          <span class="mono">02</span>
+          <div><h3>Management &amp; Production Engineering</h3><p>Master's degree, Wrocław University of Economics and Business. Thesis: a data-driven study of G2 Esports' marketing (project 02).</p></div>
+        </li>
+        <li>
+          <span class="mono">03</span>
+          <div><h3>Data Analytics Specialist</h3><p>What I do today. After hours I write Python, JavaScript and C#.</p></div>
+        </li>
+        <li class="next">
+          <span class="mono">04</span>
+          <div><h3>Machine Learning</h3><p>Where I'm heading next.</p></div>
+        </li>
+      </ol>
+      <p class="off-hours mono">Off hours: speedcubing (11.84 s single) · guitar · Formula 1 · games</p>
+    </div>
+  </section>
+
+  <!-- Face of the thesis card in 3D (there is no video for a thesis) -->
+  <template id="card-thesis">
+    <div class="paper">
+      <p class="paper-kicker">Master’s thesis · Wrocław University of Economics and Business · 2025</p>
+      <h3>Analysis of the Marketing Strategy Applied by G2 Esports</h3>
+      <div class="paper-cols">
+        <div><b>Data</b><span>Platform benchmark: X, Instagram, TikTok, YouTube</span><span>Survey of Polish G2 fans, N = 50</span></div>
+        <div><b>Method</b><span>7 composite indices</span><span>Spearman ρ, Benjamini–Hochberg</span></div>
+      </div>
+      <ul class="paper-chips"><li>EDI</li><li>PQP</li><li>LWI</li><li>GO</li><li>GAI</li><li>CTR</li><li>PMI</li></ul>
+      <p class="paper-take"><span>Three pillars</span> steady weekly cadence · short → long bridges · light localisation</p>
+    </div>
+  </template>
+
+  <!-- Inspect: opened by clicking the presented card -->
+  <div class="inspect" id="inspect" role="dialog" aria-modal="true" aria-labelledby="inspect-title" hidden>
+    <aside class="inspect-panel">
+      <button type="button" class="about-close mono" id="inspect-close">← Back <kbd>Esc</kbd></button>
+      <p class="index mono" id="inspect-index"></p>
+      <h2 id="inspect-title"></h2>
+      <div class="inspect-body" id="inspect-body"></div>
+      <div class="links" id="inspect-links"></div>
+    </aside>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
