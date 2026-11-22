@@ -840,7 +840,8 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
 
   /* ---- state ---- */
   let s = 0, v = 0, phase = 'off', lightsAt = 0, outAt = 0, holdFor = 0, reaction = null, jumped = false;
-  let leaving = false, finishedAt = 0, finishSent = false, throttle = 0, quickStart = false;
+  let leaving = false, finishedAt = 0, finishSent = false, throttle = 0, quickStart = false, lastPush = -1e9, armed = false;
+  const ARM_PAUSE = 600;   // ms without scrolling before a scroll counts as a jump start or a reaction
   const SKILLS_KEY = 'wk-skills', LIGHTS_KEY = 'wk-lights';
   const store = { get: (k) => { try { return sessionStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch { /* private mode */ } } };
   let best = Number(localStorage.getItem('wk-f1-best')) || 0;
@@ -865,6 +866,7 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
      The text is laid out at once (so nothing jumps), each word faint; then the lines sweep in
      left to right. At a stop the reading keeps pace with the driving: the last line is in
      just before you reach the stop. A thin line ties the card to its stop. */
+  if (!$h('.j-lead')) hud.insertAdjacentHTML('beforeend', '<svg class="j-lead" aria-hidden="true"><path pathLength="1"></path><circle r="3.5"></circle></svg>');
   const lead = $h('.j-lead'), leadPath = lead.querySelector('path'), leadDot = lead.querySelector('circle');
   let lines = [], revealed = 0, shownAt = 0, cardC = null, leadOn = false;
   function fillCard(c, text) {
@@ -935,21 +937,33 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
     toastUntil = performance.now() + ms;
   }
 
-  /** Any "go" input: the first one after the lights go out is the reaction. */
-  function react(timeStamp = performance.now()) {
+  /**
+   * Any "go" input: the first one after the lights go out is the reaction.
+   * timed = false: the input belongs to a scroll that was already going when the ride opened
+   * (the scroll that opened it, a touchpad's momentum). It can't be a jump start or a reaction
+   * time: during the lights it is ignored, after them it just starts the car, untimed. The
+   * start is "armed" once the scrolling has stopped for a moment (ARM_PAUSE).
+   */
+  function react(timeStamp = performance.now(), timed = true) {
     if (phase === 'lights') {
-      if (!jumped) { jumped = true; lightsMsg.textContent = 'Jump start! Wait for the lights to go out.'; }
+      if (timed && !jumped) { jumped = true; lightsMsg.textContent = 'Jump start! Wait for the lights to go out.'; }
       return false;
     }
     if (phase === 'go') {
       phase = 'drive';
-      reaction = Math.max(1, Math.round(timeStamp - outAt));
+      const ms = Math.round(timeStamp - outAt);
+      setTimeout(() => { if (phase === 'drive') lightsEl.classList.remove('is-on'); }, 1800);
+      if (!timed || ms < 100) {   // under 100 ms nobody reacts, they guess: no time for that
+        reaction = null;
+        lightsMsg.textContent = 'GO!';
+        return true;
+      }
+      reaction = ms;
       const verdict = reaction < 200 ? 'faster than most F1 drivers' : reaction < 260 ? 'race-ready' : reaction < 400 ? 'solid start' : 'a relaxed start';
       if (!best || reaction < best) { best = reaction; localStorage.setItem('wk-f1-best', String(best)); }
       lightsMsg.innerHTML = `<b>${reaction} ms</b> ${verdict}`;
       const f1 = memories.find((m) => m.f1);
       if (f1) { f1.tag.firstChild.textContent = `Formula 1 · your start: ${reaction} ms`; f1.tagW = 0; }
-      setTimeout(() => { if (phase === 'drive') lightsEl.classList.remove('is-on'); }, 1800);
       return true;
     }
     return phase === 'drive';
@@ -999,6 +1013,8 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
     enter() {
       if (phase === 'finished' || s >= S_FIN) s = 0;   // a finished lap: back to the start (the skills stay collected)
       quickStart = store.get(LIGHTS_KEY) === '1';   // the start lights run once per visit
+      armed = false;
+      lastPush = performance.now();   // entering counts as scrolling: the gesture that opened the ride may still be going
       throttle = 0;
       phase = 'arriving';
       leaving = false;
@@ -1027,7 +1043,9 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
     },
     /** Wheel / swipe: +down = forward. */
     push(delta, timeStamp) {
-      if (!react(timeStamp)) return;
+      if (timeStamp - lastPush > ARM_PAUSE) armed = true;   // a new scroll after a pause: deliberate
+      lastPush = timeStamp;
+      if (!react(timeStamp, armed)) return;
       const d = Math.max(-THROTTLE_MAX_EVENT, Math.min(THROTTLE_MAX_EVENT, delta));   // one big event can't floor it
       throttle = Math.max(-0.6, Math.min(1, throttle + d * THROTTLE_PER_PX));
     },
@@ -1062,6 +1080,7 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
         lightsMsg.textContent = 'Lights out and away we go: scroll to drive.';
         hud.classList.add('is-in');
       }
+      if (!armed && (phase === 'lights' || phase === 'go') && now - lastPush > ARM_PAUSE) armed = true;
       if (phase === 'lights') {
         const k = Math.floor((now - lightsAt - 300) / 550) + 1;
         const n = Math.max(0, Math.min(5, k));

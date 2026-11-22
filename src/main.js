@@ -224,7 +224,8 @@ async function init() {
   const floor = createFloor({ y: FLOOR_Y, base: BASE, pool: { x: 1.0, z: -3 } });
   robot.stage.add(floor.points);
   // About as a ride around a brain-planet (not with reduced motion: there the plain chapters).
-  const journey = reduceMotion ? null : createJourney({ small: isSmall(), audio, root: aboutEl, onFinish: () => closeAbout('#p-ike'), onCollect: () => renderSkills() });
+  let journey = null;
+  if (!reduceMotion) try { journey = createJourney({ small: isSmall(), audio, root: aboutEl, onFinish: () => closeAbout('#p-ike'), onCollect: () => renderSkills() }); } catch (err) { console.error('ride unavailable, plain About instead', err); }
   if (journey) scene.add(journey.group);
   const veil = aboutEl.querySelector('.j-veil');
   const J_CUT = 0.42;            // About tween: before this the camera dives into the face, after it the ride

@@ -28,9 +28,12 @@ export function initScramble({ selector, onStart } = {}) {
     const original = node.nodeValue;
     const chars = [...original];
     const settle = chars.map((_, i) => 90 + (i / Math.max(1, chars.length - 1)) * (DURATION - 150) + Math.random() * 60);
+    // Freeze the width both ways: a wider shuffle must not push the element onto a new line
+    // (that moved "Enter in silence" out from under the finger on phones).
     const width = el.getBoundingClientRect().width;
-    const prevMin = el.style.minWidth;
-    el.style.minWidth = `${width}px`;
+    const prevMin = el.style.minWidth, prevMax = el.style.maxWidth, prevWs = el.style.whiteSpace;
+    el.style.minWidth = el.style.maxWidth = `${width}px`;
+    el.style.whiteSpace = 'nowrap';   // and it stays on one line inside
     const t0 = performance.now();
     let lastSwap = 0;
 
@@ -39,6 +42,8 @@ export function initScramble({ selector, onStart } = {}) {
       if (t >= DURATION + 80) {
         node.nodeValue = original;
         el.style.minWidth = prevMin;
+        el.style.maxWidth = prevMax;
+        el.style.whiteSpace = prevWs;
         running.delete(el);
         return;
       }
@@ -57,6 +62,7 @@ export function initScramble({ selector, onStart } = {}) {
   }
 
   document.addEventListener('pointerover', (e) => {
+    if (e.pointerType !== 'mouse') return;   // a tap is not a hover: nothing to shuffle under a finger
     const el = e.target.closest?.(selector);
     if (el && !el.contains(e.relatedTarget)) run(el);
   });
