@@ -367,7 +367,7 @@ h2 { margin: 0; font-size: clamp(36px, 4.4vw, 64px); line-height: 1; letter-spac
   transition: opacity .5s ease, transform .5s var(--ease-out);
 }
 .inspect.is-open .inspect-panel { opacity: 1; transform: none; transition-delay: .5s; }
-.inspect-panel .about-close { margin: 0 0 22px; }
+.inspect-panel .about-close { top: 0; margin: 0 0 22px; }   /* sticks to the top of the panel, not 76px down (that is for the full-screen About) */
 .inspect-panel .index { margin: 0 0 8px; }
 .inspect-panel h2 { font-size: clamp(28px, 2.6vw, 38px); }
 .inspect-body .context { margin: 14px 0 0; font-size: 12px; color: var(--hot); letter-spacing: .02em; }
