@@ -66,6 +66,21 @@ Mały panel „tune me”: gęstość cząsteczek, kolor akcentu, prędkość ro
 - **Dostępność:** dźwięk zawsze z wyborem i wyłącznikiem, a reduced-motion wyłącza efekty.
 - **Brama** to dodatkowe kliknięcie przed treścią. Dlatego krótka, z widocznym postępem.
 
-## „O mnie”
+## „O mnie”: wnętrze głowy
 
-Sieć neuronowa okazała się zbyt statyczna. Zostaje na gałęzi `feature/about-network`, a nowy pomysł jest po stronie Witka.
+Sieć neuronowa okazała się zbyt statyczna (zostaje na gałęzi ). Nowy kierunek, zarys zrobiony:
+
+- **Wejście:** kliknięcie w twarz, kamera wlatuje do głowy, „O mnie” ma własne przewijanie z bezwładnością.
+- **Ścieżka:** pomarańczowa linia rysuje się przy przewijaniu, a po niej jedzie mały line follower. Cztery przystanki, przy każdym cząsteczki układają się w symbol:
+  - 01 Automatyka i Robotyka (2020–2024): ramię robota,
+  - 02 Magisterka (2024–2025): sieć z pracy o G2,
+  - 03 Praca dziś (2025–teraz): wagon kolejowy, z którego unoszą się dane (bez nazwy firmy),
+  - 04 Machine Learning: sieć zbudowana w 37%, dalej linia przerywana.
+- **Po godzinach:** kostka Rubika z cząsteczek w tle, działające światła startowe F1 (czas reakcji, najlepszy wynik zapamiętany).
+
+Do zrobienia po kolei:
+1. Kostka do kręcenia, która układa się w 11,84 s.
+2. Gitara: struny do szarpania, strojone do muzyki strony.
+3. Osiągnięcia na całej stronie (gaming).
+4. Bio od Witka zamiast roboczego zdania w „hello”.
+5. Mocniejszy symbol na start „hello” (teraz helisa).

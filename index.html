@@ -213,31 +213,78 @@
     </section>
   </main>
 
-  <!-- About: opened by clicking the face -->
-  <section class="about" id="about" role="dialog" aria-modal="true" aria-labelledby="about-title" hidden>
-    <div class="about-panel" data-lenis-prevent>
+  <!-- About: opened by clicking the face. Inside the head: a walk along a line, then things to play with. -->
+  <section class="about" id="about" role="dialog" aria-modal="true" aria-labelledby="about-title" data-lenis-prevent hidden>
+    <div class="about-inner">
       <button type="button" class="about-close mono" id="about-close">← Back <kbd>Esc</kbd></button>
-      <p class="eyebrow mono">About me</p>
-      <h2 id="about-title">From robots to models</h2>
-      <ol class="path">
-        <li>
-          <span class="mono">01</span>
-          <div><h3>Automation &amp; Robotics</h3><p>Engineering degree, Wrocław University of Science and Technology.</p></div>
-        </li>
-        <li>
-          <span class="mono">02</span>
-          <div><h3>Management &amp; Production Engineering</h3><p>Master's degree, Wrocław University of Economics and Business. Thesis: a data-driven study of G2 Esports' marketing (project 02).</p></div>
-        </li>
-        <li>
-          <span class="mono">03</span>
-          <div><h3>Industrial Data / Work Order Engineer</h3><p>What I do today: production and work-order data, and web apps that automate business processes.</p></div>
-        </li>
-        <li class="next">
-          <span class="mono">04</span>
-          <div><h3>Machine Learning</h3><p>Where I'm heading next.</p></div>
-        </li>
-      </ol>
-      <p class="off-hours mono">Off hours: speedcubing (11.84 s single) · guitar · Formula 1 · games</p>
+
+      <header class="chapter about-hello" data-chapter="0">
+        <p class="eyebrow mono">About me</p>
+        <h2 id="about-title">From robots to models</h2>
+        <p class="lead">I'm Witold. I studied robotics, moved into industrial data, and I'm building my way toward machine learning.</p>
+        <p class="about-hint mono">scroll · the line follower knows the way</p>
+      </header>
+
+      <div class="route">
+        <svg class="route-line" aria-hidden="true">
+          <path class="route-ghost"></path>
+          <path class="route-ink"></path>
+          <path class="route-tail"></path>
+          <g class="follower">
+            <rect class="wheel" x="-10" y="-6" width="4" height="9" rx="1.5"></rect>
+            <rect class="wheel" x="6" y="-6" width="4" height="9" rx="1.5"></rect>
+            <rect class="chassis" x="-7" y="-9" width="14" height="17" rx="3"></rect>
+            <rect class="sensor" x="-6" y="7" width="12" height="2.5" rx="1.2"></rect>
+          </g>
+        </svg>
+        <ol class="stations">
+          <li class="chapter station" data-chapter="1">
+            <p class="station-n mono"><b>01</b> 2020 – 2024</p>
+            <h3>Automation &amp; Robotics</h3>
+            <p>Engineering degree at Wrocław University of Science and Technology. Kinematics, control and sensors: where I learned to make things move, including a line follower built from cardboard.</p>
+          </li>
+          <li class="chapter station" data-chapter="2">
+            <p class="station-n mono"><b>02</b> 2024 – 2025</p>
+            <h3>Management &amp; Production Engineering</h3>
+            <p>Master's degree at Wrocław University of Economics and Business. My thesis turned G2 Esports' social media into data: seven indices, a fan survey and the statistics behind them.</p>
+          </li>
+          <li class="chapter station" data-chapter="3">
+            <p class="station-n mono"><b>03</b> 2025 – now</p>
+            <h3>Industrial data, on rails</h3>
+            <p>Industrial Data / Work Order Engineer at a rail vehicle manufacturer. I manage and analyse production and work-order data, and build web apps that automate business processes (ERP, MES, Power Platform).</p>
+          </li>
+          <li class="chapter station next" data-chapter="4">
+            <p class="station-n mono"><b>04</b> next</p>
+            <h3>Machine Learning</h3>
+            <p>Models that learn from the kind of data I already work with every day. The line keeps going.</p>
+            <p class="loading mono" aria-hidden="true">loading… <span>37</span>%</p>
+          </li>
+        </ol>
+      </div>
+
+      <section class="chapter off-hours" data-chapter="5" aria-labelledby="off-title">
+        <p class="eyebrow mono">Off hours</p>
+        <h3 id="off-title">Cubes, strings, engines</h3>
+        <p>Speedcubing, guitar, Formula 1 and games. Start with the lights.</p>
+        <div class="toys">
+          <div class="toy f1">
+            <p class="toy-kicker mono">Formula 1 · reaction start</p>
+            <button type="button" class="f1-gantry" id="f1" aria-describedby="f1-msg">
+              <span class="lamps" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+              <span class="f1-msg mono" id="f1-msg" aria-live="polite">Click to start. Click again when the lights go out.</span>
+            </button>
+            <p class="f1-score mono">F1 drivers ≈ 200 ms · your best <span id="f1-best">—</span></p>
+          </div>
+          <div class="toy soon">
+            <p class="toy-kicker mono">Rubik's cube · 11.84 s single</p>
+            <p>Next: a cube you can turn, which solves itself in exactly 11.84 s.</p>
+          </div>
+          <div class="toy soon">
+            <p class="toy-kicker mono">Guitar</p>
+            <p>Next: six strings you can strum, tuned to this page's music.</p>
+          </div>
+        </div>
+      </section>
     </div>
   </section>
 

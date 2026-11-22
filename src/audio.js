@@ -239,6 +239,16 @@ export function createAudio() {
     },
     /** Camera moves: in (up) or back out (down). */
     whoosh(up = true) { burst(up ? { from: 500, to: 2400, dur: 0.9, level: 0.03, q: 2 } : { from: 2000, to: 420, dur: 0.7, level: 0.025, q: 2 }); },
+    /** A short beep (F1 start lights). */
+    blip(freq = 660) {
+      if (!enabled) return;
+      const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'triangle'; o.frequency.value = freq;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.06, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+      o.connect(g).connect(n.sfx); o.start(t); o.stop(t + 0.18);
+    },
     /** The smallest possible hover tick. */
     tick() {
       if (!enabled) return;

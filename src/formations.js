@@ -423,6 +423,125 @@ export function careerHelix(N) {
   ]);
 }
 
+/** Point on the surface of a tube of radius r around segment a → b. */
+function onTube(a, b, r) {
+  const t = R(), d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const len = Math.hypot(...d) || 1;
+  const u = d.map((v) => v / len);
+  // two directions across the tube
+  const h = Math.abs(u[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  let p = [u[1] * h[2] - u[2] * h[1], u[2] * h[0] - u[0] * h[2], u[0] * h[1] - u[1] * h[0]];
+  const pl = Math.hypot(...p); p = p.map((v) => v / pl);
+  const q = [u[1] * p[2] - u[2] * p[1], u[2] * p[0] - u[0] * p[2], u[0] * p[1] - u[1] * p[0]];
+  const ang = R() * TAU, c = Math.cos(ang) * r, s = Math.sin(ang) * r;
+  return [0, 1, 2].map((k) => a[k] + d[k] * t + p[k] * c + q[k] * s);
+}
+
+/** About, stop 1 (robotics): an industrial arm on its base, joints glowing orange. */
+export function robotArm(N) {
+  const base = [-0.3, -0.46, 0], shoulder = [-0.3, -0.3, 0], elbow = [0.02, 0.2, 0], wrist = [0.36, 0.04, 0];
+  const tool = [0.36, -0.12, 0];
+  return build(N, [
+    { w: 0.1, fn: () => [...onCylinder(base[0], base[2], 0.13, -0.5, -0.42), blue(0.5), 0.85] },
+    { w: 0.06, fn: () => [...onCylinder(base[0], base[2], 0.09, -0.42, -0.3), blue(0.6), 0.85] },
+    { w: 0.26, fn: () => [...onTube(shoulder, elbow, 0.05), blue(0.55 + R() * 0.3), 0.9] },
+    { w: 0.2, fn: () => [...onTube(elbow, wrist, 0.038), blue(0.6 + R() * 0.3), 0.9] },
+    { w: 0.06, fn: () => [...onTube(wrist, tool, 0.014), blue(0.85), 0.9] },
+    { w: 0.06, fn: () => { const s = R() < 0.5 ? -1 : 1; return [...onBox(tool[0] - 0.012 + s * 0.04, tool[0] + 0.012 + s * 0.04, tool[1] - 0.09, tool[1], -0.03, 0.03), blue(0.9), 0.95]; } },
+    { w: 0.12, fn: () => { const j = [shoulder, elbow, wrist][(R() * 3) | 0]; return [...onSphere(j[0], j[1], j[2], j === wrist ? 0.035 : 0.055), hot(1.05), 1]; } },
+    { w: 0.14, fn: () => {   // the floor it stands on
+      const x = Math.round(lerp(-6, 6, R())) / 10, z = lerp(-0.35, 0.35, R());
+      return R() < 0.5 ? [x, -0.5, z, blue(0.3), 0.35] : [lerp(-0.6, 0.6, R()), -0.5, Math.round(z * 10) / 10, blue(0.3), 0.35];
+    } },
+  ], { tilt: 0.12, scale: 0.95 });
+}
+
+/** About, stop 3 (industrial data, rail): a passenger car on its bogies, data rising off it. */
+export function railWagon(N) {
+  const L = 0.62, B = -0.1, T = 0.14, W = 0.13;
+  const windows = Array.from({ length: 7 }, (_, k) => lerp(-0.47, 0.47, k / 6));
+  const wheels = [-0.47, -0.33, 0.33, 0.47];
+  return build(N, [
+    { w: 0.3, fn: () => [...onBox(-L, L, B, T, -W, W), blue(0.45 + R() * 0.2), 0.75] },
+    { w: 0.06, fn: () => { const a = lerp(0.15, Math.PI - 0.15, R()); return [lerp(-L, L, R()), T + Math.sin(a) * 0.035, Math.cos(a) * W, blue(0.55), 0.8]; } },   // roof
+    { w: 0.16, fn: () => {   // windows, lit
+      const x = windows[(R() * windows.length) | 0];
+      return [x + jit(0.075), 0.06 + jit(0.07), W + 0.002, blue(0.95), 0.95];
+    } },
+    { w: 0.05, fn: () => [lerp(-L, L, R()), -0.04 + jit(0.008), W + 0.004, hot(), 0.95] },   // stripe
+    { w: 0.08, fn: () => { const x = wheels[(R() * 4) | 0], s = R() < 0.5 ? -1 : 1, a = R() * TAU; return [x + Math.cos(a) * 0.05, -0.2 + Math.sin(a) * 0.05, s * (W - 0.01), blue(0.7), 0.9]; } },
+    { w: 0.04, fn: () => { const c = R() < 0.5 ? -0.4 : 0.4; return [...onBox(c - 0.12, c + 0.12, -0.16, -0.11, -W + 0.02, W - 0.02), blue(0.35), 0.8]; } },   // bogies
+    { w: 0.11, fn: () => {   // rails and sleepers
+      if (R() < 0.6) return [lerp(-0.82, 0.82, R()), -0.255, (R() < 0.5 ? -1 : 1) * (W - 0.01), blue(0.6), 0.75];
+      return [Math.round(lerp(-8, 8, R())) / 10 + jit(0.02), -0.265, lerp(-W - 0.05, W + 0.05, R()), blue(0.3), 0.5];
+    } },
+    { w: 0.12, fn: () => {   // data rising off the car: loose bits, thinning upward
+      const col = Math.round(lerp(-5, 5, R())), row = Math.floor(R() ** 1.5 * 7);
+      if ((col * 3 + row * 5) % 4 === 0) return [col / 10, T + 0.1, 0, blue(0.6), 0];   // gaps between bits
+      const bit = (col * 7 + row) % 5 === 0;
+      return [col / 10 + jit(0.022), T + 0.1 + row * 0.05 + jit(0.022), jit(0.022), bit ? hot(0.95) : blue(0.75), 0.9 * (1 - row / 7)];
+    } },
+  ], { tilt: 0.18, scale: 0.78 });
+}
+
+/**
+ * About, stop 4 (machine learning, next): a neural network only partly built.
+ * Left of the build front everything is in place; right of it, only faint nodes
+ * and loose particles waiting to join. built: 0..1.
+ */
+export function neuralLoading(N, built = 0.37) {
+  const layers = [5, 7, 7, 4, 2];
+  const xs = layers.map((_, k) => lerp(-0.5, 0.5, k / (layers.length - 1)));
+  const nodes = layers.flatMap((n, k) => Array.from({ length: n }, (_, j) => [xs[k], (j - (n - 1) / 2) * 0.13, 0]));
+  const front = lerp(-0.5, 0.5, built) + 0.04;
+  const edges = [];
+  let o = 0;
+  layers.forEach((n, k) => {
+    if (k < layers.length - 1) for (let a = 0; a < n; a++) for (let b = 0; b < layers[k + 1]; b++) edges.push([nodes[o + a], nodes[o + n + b]]);
+    o += n;
+  });
+  const builtEdges = edges.filter(([a, b]) => b[0] <= front);
+  const builtNodes = nodes.filter((p) => p[0] <= front), ghostNodes = nodes.filter((p) => p[0] > front);
+  return build(N, [
+    { w: 0.22, fn: () => { const p = builtNodes[(R() * builtNodes.length) | 0]; return [...onSphere(p[0], p[1], p[2], 0.03), blue(0.9), 0.95]; } },
+    { w: 0.3, fn: () => { const [a, b] = builtEdges[(R() * builtEdges.length) | 0]; return [...onSegment(a, b, 0.004), blue(0.5), 0.45]; } },
+    { w: 0.06, fn: () => { const p = ghostNodes[(R() * ghostNodes.length) | 0]; return [...onSphere(p[0], p[1], p[2], 0.03), blue(0.45), 0.25]; } },
+    { w: 0.08, fn: () => [front + jit(0.012), lerp(-0.48, 0.48, R()), jit(0.08), hot(1.0), 0.8] },   // the build front
+    { w: 0.28, fn: () => {   // particles still waiting to join
+      const x = lerp(front + 0.05, 0.62, R() ** 0.8);
+      return [x, jit(0.9), jit(0.4), blue(0.4 + R() * 0.3), 0.2];
+    } },
+  ]);
+}
+
+/** About, off hours: a Rubik's cube, the top layer caught mid-turn. */
+export function rubiksCube(N) {
+  const s = 0.16, half = 1.5 * s;
+  // Face colours in the site's palette: blues, white, orange.
+  const faces = [
+    { n: [0, 0, 1], c: hot(1.0) }, { n: [0, 0, -1], c: blue(0.35) },
+    { n: [1, 0, 0], c: blue(0.95) }, { n: [-1, 0, 0], c: blue(0.6) },
+    { n: [0, 1, 0], c: [0.95, 0.97, 1.0] }, { n: [0, -1, 0], c: blue(0.45) },
+  ];
+  const turn = 0.32;   // radians, top layer
+  return build(N, [
+    { w: 1, fn: () => {
+      const f = faces[(R() * 6) | 0];
+      const axis = f.n.findIndex((v) => v !== 0);
+      const i = (R() * 3) | 0, j = (R() * 3) | 0;
+      // a sticker: inset square on the cubie face
+      const u = (i - 1) * s + (R() - 0.5) * s * 0.82, v = (j - 1) * s + (R() - 0.5) * s * 0.82;
+      const p = [0, 0, 0];
+      p[axis] = f.n[axis] * half;
+      const others = [0, 1, 2].filter((k) => k !== axis);
+      p[others[0]] = u; p[others[1]] = v;
+      let q = p;
+      if (p[1] > s * 0.5 + 1e-6 || (axis === 1 && f.n[1] > 0)) q = rotY(turn)(p);   // top layer turned
+      return [...rotY(0.6)(rotX(0.45)(q)), f.c, 0.9];
+    } },
+  ], { scale: 1.25 });
+}
+
 /* ------------------------------------------------------- signature: pen -- */
 
 /**

@@ -7,7 +7,9 @@
  *   2–7 one shape per project, pushed back as a dim backdrop while a robot arm
  *       (robot.js) hands over each project's video card, driven by scroll
  *   last  the signature again, for contact (the robot signs it)
- *   A  About: a career helix, entered with a camera fly-through
+ *   A  About (about.js): the camera flies into the head, then the particles follow the About
+ *      chapters: hello, the four stops on the line (robot arm, thesis, rail car, a network
+ *      still loading), off hours (a Rubik's cube)
  * Around it (world.js): dust through the whole page and a soft floor under the robot.
  * Scrolling is smoothed with inertia (Lenis) for the mouse wheel; touch keeps its own.
  */
@@ -20,6 +22,7 @@ import { createDust, createFloor } from './world.js';
 import { createAudio } from './audio.js';
 import { createGate } from './gate.js';
 import { initScramble } from './scramble.js';
+import { createAbout } from './about.js';
 
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const isSmall = () => innerWidth <= 860;
@@ -48,6 +51,8 @@ const scenes = [...document.querySelectorAll('.scene')];
 const railLinks = [...document.querySelectorAll('[data-rail]')];
 const hintText = $('#hint-text');
 const aboutEl = $('#about');
+
+let aboutCtl = null;   // the About controller (about.js), shared with the no-WebGL fallback
 
 function webglAvailable() {
   try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); }
@@ -151,8 +156,9 @@ async function init() {
     F.ikeChart(N), F.thesisNetwork(N), F.sigmaTowers(N), F.gyroscope(N), F.lineFollower(N), F.ticTacToe(N), F.browserWindow(N),
     sig,
   ];
-  const about = F.careerHelix(N);
-  const get = (k) => (k === 'A' ? about : formations[k]);
+  // About chapters, in order: hello, 4 stops on the line, off hours.
+  const aboutForms = [F.careerHelix(N), F.robotArm(N), formations[3], F.railWagon(N), F.neuralLoading(N), F.rubiksCube(N)];
+  const get = (k) => (typeof k === 'string' ? aboutForms[Number(k.slice(1))] : formations[k]);
 
   /* ---- geometry ---- */
   const aFrom = new THREE.BufferAttribute(new Float32Array(N * 4), 4);
@@ -339,13 +345,16 @@ async function init() {
   };
 
   /* ---- About ---- */
-  let aboutTarget = 0, aboutT = 0, aboutFrom = 1, lastFocus = null;
+  let aboutTarget = 0, aboutT = 0, aboutFrom = 1, lastFocus = null, aboutShown = 0;
   const closeBtn = $('#about-close');
+  const about = (aboutCtl = createAbout({ audio }));
   function openAbout() {
     if (aboutTarget === 1) return;
     lastFocus = document.activeElement;
     aboutFrom = Math.round(fDisp);
     aboutEl.hidden = false;
+    about.open();
+    aboutShown = 0;
     requestAnimationFrame(() => aboutEl.classList.add('is-open'));
     document.body.classList.add('is-about');
     audio.whoosh(true);
@@ -357,6 +366,7 @@ async function init() {
   function closeAbout() {
     if (aboutTarget === 0) return;
     aboutTarget = 0;
+    about.close();
     audio.whoosh(false);
     aboutEl.classList.remove('is-open');
     document.body.classList.remove('is-about');
@@ -369,7 +379,11 @@ async function init() {
   addEventListener('keydown', (e) => {
     if (aboutTarget !== 1) return;
     if (e.key === 'Escape') closeAbout();
-    if (e.key === 'Tab') { e.preventDefault(); closeBtn.focus(); }   // single control: keep focus in the dialog
+    if (e.key === 'Tab') {   // keep focus inside the dialog
+      const items = [...aboutEl.querySelectorAll('button, a[href], input')].filter((x) => x.offsetParent);
+      const i = items.indexOf(document.activeElement);
+      if (i < 0 || (e.shiftKey ? i === 0 : i === items.length - 1)) { e.preventDefault(); items[e.shiftKey ? items.length - 1 : 0].focus(); }
+    }
   });
   /* ---- Inspect: click the presented card, the arm holds it out and the camera moves in ---- */
   const inspectEl = $('#inspect');
@@ -432,8 +446,8 @@ async function init() {
   addEventListener('scroll', () => { if (inspectTarget === 1 && Math.abs(scrollY - inspectScrollY) > 24) closeInspect(true); }, { passive: true });
 
   addEventListener('click', (e) => {
-    if (e.target.closest('a, button, .about-panel, .inspect-panel')) return;
-    if (aboutTarget === 1) { closeAbout(); return; }                 // click outside the panel closes
+    if (e.target.closest('a, button, input, .about, .inspect-panel')) return;
+    if (aboutTarget === 1) return;
     if (inspectTarget === 1) { closeInspect(); return; }
     if (cardHover) { openInspect(robot.held()); return; }
     if (isTouch && robot.stage.visible && aboutT === 0) {
@@ -488,6 +502,7 @@ async function init() {
     const a = e.target.closest('a[href^="#"]');
     if (!a || a.hasAttribute('data-open-about') || a.classList.contains('skip')) return;
     if (!introDone) { e.preventDefault(); pendingHash = a.getAttribute('href'); hurry(); return; }
+    if (aboutTarget === 1) closeAbout();   // a link in the nav while inside the head: step out, then go
     if (lenis && e.detail > 0) { e.preventDefault(); glideTo(a.getAttribute('href')); history.replaceState(null, '', a.getAttribute('href')); }
   }, true);
   // Keyboard scrolling stays native; if a wheel glide is still running, end it where it is
@@ -551,8 +566,11 @@ async function init() {
     const rest = easeInOut(clamp01((writeTime - penPlan.duration - 0.25) / 1.6));
 
     if (aboutT > 0) {
-      setPair(aboutFrom, 'A');
-      uniforms.uMix.value = a;
+      const ch = about.chapter();
+      aboutShown += (ch - aboutShown) * Math.min(1, dt * 5);
+      const ci = Math.min(4, Math.floor(aboutShown)), cf = smoothstep(0.2, 0.8, aboutShown - ci);
+      if (aboutT < 1) { setPair(aboutFrom, 'A' + Math.round(aboutShown)); uniforms.uMix.value = a; }
+      else { setPair('A' + ci, 'A' + (ci + 1)); uniforms.uMix.value = cf; }
       uniforms.uWrite.value = 1;
       uniforms.uWriteTo.value = 1;
       uniforms.uFlight.value = 0.35;
@@ -570,7 +588,7 @@ async function init() {
     faceHover = aboutT === 0 && intro >= 1 && Math.abs(fDisp - 1) < 0.03 && onFace();
     document.body.classList.toggle('is-face-hover', faceHover);
     let tx = 0, ty = 0;
-    if (aboutT > 0) { ty = Math.sin(t * 0.4) * 0.5; tx = 0.12; }
+    if (aboutT > 0) { ty = Math.sin(t * 0.3) * 0.3 + (pointerSeen && !reduceMotion ? ndc.x * 0.4 : 0); tx = 0.12 - (pointerSeen && !reduceMotion ? ndc.y * 0.15 : 0); }
     else if (fDisp < 1.5) {
       // The head turns toward the cursor anywhere on the first screen, not only over the face
       // (clicking still needs the face). tanh: quick to react near the head, eases out toward the edges.
@@ -725,9 +743,10 @@ function inlineDetails() {
 /** Without WebGL the About panel still opens, as a plain dialog. */
 function plainAbout() {
   inlineDetails();
-  const close = () => { aboutEl.hidden = true; aboutEl.classList.remove("is-open"); document.body.classList.remove("is-about"); document.documentElement.classList.remove("is-locked"); };
+  const about = (aboutCtl ??= createAbout());
+  const close = () => { about.close(); aboutEl.hidden = true; aboutEl.classList.remove("is-open"); document.body.classList.remove("is-about"); document.documentElement.classList.remove("is-locked"); };
   document.querySelectorAll("[data-open-about]").forEach((el) => el.addEventListener("click", (e) => {
-    e.preventDefault(); aboutEl.hidden = false; aboutEl.classList.add("is-open"); document.body.classList.add("is-about"); document.documentElement.classList.add("is-locked"); $("#about-close").focus();
+    e.preventDefault(); aboutEl.hidden = false; about.open(); aboutEl.classList.add("is-open"); document.body.classList.add("is-about"); document.documentElement.classList.add("is-locked"); $("#about-close").focus();
   }));
   $("#about-close").addEventListener("click", close);
   addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
