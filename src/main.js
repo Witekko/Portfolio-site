@@ -182,7 +182,7 @@ async function init() {
 
   /* ---- layout ---- */
   let scale = 1;
-  const base = { x: 0, y: 0, stageY: 0, stageDrop: 4, bgX: 0, bgY: 0, bgScale: 1 };
+  const base = { x: 0, y: 0, stageY: 0, stageDrop: 4, bgX: 0, bgY: 0, bgScale: 1, contactX: 0, contactY: 0, contactScale: 1 };
   const BG_DEPTH = 2.4;
   // Stage-space bounds of the robot cell: presented card (with its perspective growth) → arm → magazine.
   const CELL = { xMin: -1.25, xMax: 2.25, yMin: -2.05, yMax: 1.5 };
@@ -202,6 +202,7 @@ async function init() {
       robot.stage.position.x = 0.15 * rs;
       base.stageY = visH / 2 - visH * 0.27 - 0.25 * rs;   // keep the wrist clear of the nav
       base.bgX = base.x; base.bgY = base.y; base.bgScale = scale * 1.1;
+      base.contactX = base.x; base.contactY = base.y; base.contactScale = scale;
     } else {
       scale = Math.min(visH * 0.8, (visW * 0.46) / 1.15);
       base.x = visW * 0.2; base.y = -visH * 0.01;
@@ -236,6 +237,17 @@ async function init() {
       base.bgX = ((cx / w) * 2 - 1) * (visW / 2) * k;
       base.bgY = -((cy / h) * 2 - 1) * (visH / 2) * k;
       base.bgScale = ((appW / w) * visW * k) / 1.1;
+
+      // Contact: the robot signs here. The signature ends well left of the robot's base
+      // (near its axis the turret would have to whip around) and stays within the arm's
+      // reach on the left, and clear of the contact copy.
+      const contactCopy = document.querySelector('.contact .copy');
+      const copyRightW = (((pad + (contactCopy?.offsetWidth || 512)) / w) - 0.5) * visW;
+      const sigRight = robot.stage.position.x + 1.0 * rs;          // stage x = 1.0, the base is at 1.6
+      const sigWidth = Math.max(0.8, Math.min(2.1 * rs, sigRight - copyRightW - 0.25));
+      base.contactScale = sigWidth / 0.95;                         // the signature is 0.95 units wide
+      base.contactX = sigRight - sigWidth / 2;
+      base.contactY = base.y;
     }
     points.position.set(base.x, base.y, 0);
     points.scale.setScalar(scale);
@@ -434,15 +446,14 @@ async function init() {
     // Contact: the ending sequence plays on time once the last card is back in the magazine.
     const pNow = s - 1;
     const atContact = pNow > NP - 0.45 && pDisp > NP - 0.5;
-    const SEQ_END = SIGN_START + 0.2 + penPlan.duration + 1.5;
+    const SEQ_END = SIGN_START + 0.2 + penPlan.duration + 2.2;   // write, then fold away
     if (reduceMotion) seqT = atContact ? SEQ_END : 0;
     else seqT = atContact ? Math.min(SEQ_END, seqT + dt) : Math.max(0, seqT - dt * 3);
     const writeTime = seqT - SIGN_START - 0.2;
     const pen = penPlan.at(writeTime);
     const ink = pen.ink;
-    // Done writing: lift the pen and step back so the whole signature shows.
-    const after = easeInOut(clamp01((writeTime - penPlan.duration - 0.3) / 1.0));
-    if (after > 0) { pen.x += 0.22 * after; pen.y -= 0.55 * after; pen.lift = Math.max(pen.lift, after); }
+    // Done writing: the arm folds into a calm pose to the right, away from the signature.
+    const rest = easeInOut(clamp01((writeTime - penPlan.duration - 0.25) / 1.6));
 
     if (aboutT > 0) {
       setPair(aboutFrom, 'A');
@@ -481,6 +492,11 @@ async function init() {
     points.position.set(lerp(base.x, base.bgX, bg), lerp(base.y, base.bgY, bg), -BG_DEPTH * bg);
     points.scale.setScalar(lerp(scale, base.bgScale, bg));
     uniforms.uAlphaMul.value = 1 - 0.62 * bg;
+    const ca = smoothstep(LAST - 0.7, LAST, fDisp) * (1 - a);   // Contact: where the robot signs
+    if (ca > 0) {
+      points.position.set(lerp(points.position.x, base.contactX, ca), lerp(points.position.y, base.contactY, ca), points.position.z);
+      points.scale.setScalar(lerp(points.scale.x, base.contactScale, ca));
+    }
 
     // Robot: p = 0 → card 1 held up, 1 → card 2, … (scroll-driven, smoothed); then the timed ending.
     const p = pNow;
@@ -498,7 +514,7 @@ async function init() {
       robot.stage.updateMatrixWorld();
       const writeStart = toStage(penPlan.start.x, penPlan.start.y, new THREE.Vector3());
       const penWrite = seqT >= SIGN_START ? { tip: toStage(pen.x, pen.y, sigLocal), lift: pen.lift } : null;
-      robot.update(THREE.MathUtils.clamp(pDisp, -0.5, NP - 0.5), t, !reduceMotion, { seq: { t: seqT, writeStart, write: penWrite }, inspect: ie });
+      robot.update(THREE.MathUtils.clamp(pDisp, -0.5, NP - 0.5), t, !reduceMotion, { seq: { t: seqT, writeStart, write: penWrite, rest }, inspect: ie });
     }
 
     // Hovering the presented card shows it can be clicked.

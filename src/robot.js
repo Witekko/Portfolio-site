@@ -42,6 +42,9 @@ const Q_UPRIGHT = new THREE.Quaternion();
 // Writing on an upright plane from behind it: tip forward-down, wrist up and back.
 const Q_PEN = new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.22, 0, 0));
 const PEN_LIFT = 0.12;
+// After signing: a calm pose folded to the right, wrist left of the shoulder so the elbow
+// stays out to the right, well clear of the signature.
+const REST_GRIP = new THREE.Vector3(1.0, -0.9 - ROD, 0.0);
 
 // Ending, on its own clock (seconds): to the cup, take the pen, bring it to the first stroke.
 export const SIGN_START = 3.3;
@@ -347,7 +350,7 @@ export function createRobotStage(items, cssScene) {
 
   /**
    * p: project progress (0 = card 1 held up, 1 = card 2, …), driven by scroll.
-   * opts.seq: the timed ending, { t (seconds), writeStart: Vector3, write: { tip: Vector3, lift } | null }
+   * opts.seq: the timed ending, { t (seconds), writeStart: Vector3, write: { tip: Vector3, lift } | null, rest: 0..1 }
    *           positions in stage space; while seq.t > 0 it takes over from the cards.
    * opts.inspect: 0..1, how far the held card is brought out toward the camera
    */
@@ -381,6 +384,7 @@ export function createRobotStage(items, cssScene) {
         gripForTip(seq.write.tip, seq.write.lift, pose.attach);
         pose.q.copy(Q_PEN);
         pose.grip = 1;
+        if (seq.rest > 0) { pose.attach.lerp(REST_GRIP, seq.rest); pose.q.slerp(Q_UPRIGHT, seq.rest); }
       }
     }
 
@@ -436,5 +440,5 @@ export function createRobotStage(items, cssScene) {
   /** World-space centre of a card (for the camera to frame it). */
   const cardCenterWorld = (k, out = new THREE.Vector3()) => cards[k].group.getWorldPosition(out);
 
-  return { stage, update, syncCss, cards, pickHeld, cardCenterWorld, held: () => heldCard };
+  return { stage, update, syncCss, cards, pickHeld, cardCenterWorld, held: () => heldCard, yaw: () => arm.turret.rotation.y };
 }
