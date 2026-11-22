@@ -1,14 +1,15 @@
 /*
  * Sound, generated in the browser (Web Audio): no files, no licences.
  *
- *  - a slow, hypnotic drone (low A-minor tones breathing through a moving filter),
- *    a bed of filtered noise ("air"), distant bells now and then, all in a long reverb;
+ *  - music: a slow, hypnotic drone (low A-minor tones breathing through a moving filter)
+ *    and distant bells now and then, in a long reverb; no noise bed;
  *  - the music follows the story: dark in the hero, a soft pulse in the projects,
  *    open and spacious inside the head (About), quiet under the signature;
  *  - sounds tied to what moves: the pen scratching (its loudness follows the pen's
  *    speed), the robot's servos (pitch follows how fast the arm moves), the gripper
  *    clicking, a whoosh for camera moves, a tiny tick on hover.
  *
+ * Two volume groups, "music" and "fx", each with its own slider (saved in localStorage).
  * Nothing plays until setEnabled(true) is called from a user gesture.
  */
 
@@ -32,7 +33,10 @@ function impulse(ctx, seconds, decay) {
 
 export function createAudio() {
   let ctx = null, enabled = false, n = null;
-  let nextBell = 0, nextPulse = 0, state = { projects: 0, about: 0, contact: 0 };
+  let nextBell = 0, nextPulse = 0;
+  const volume = { music: 0.8, fx: 0.8 };
+  try { Object.assign(volume, JSON.parse(localStorage.getItem('wk-volume') || '{}')); } catch {}
+  const groups = { music: [], fx: [] };
 
   function build() {
     ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -53,9 +57,11 @@ export function createAudio() {
     const dry = ctx.createGain();
     dry.gain.value = 0.85;
     dry.connect(master);
-    /** a channel: dry + a send into the reverb */
-    const bus = (wet) => {
+    /** a channel in a volume group: dry + a send into the reverb */
+    const bus = (wet, group) => {
       const g = ctx.createGain();
+      g.gain.value = volume[group];
+      groups[group].push(g);
       g.connect(dry);
       const s = ctx.createGain();
       s.gain.value = wet;
@@ -69,7 +75,7 @@ export function createAudio() {
     droneF.type = 'lowpass'; droneF.frequency.value = 420; droneF.Q.value = 0.8;
     const droneOut = ctx.createGain();
     droneOut.gain.value = 0.5;
-    droneF.connect(droneOut).connect(bus(0.5));
+    droneF.connect(droneOut).connect(bus(0.5, 'music'));
     [[55, 'sine', 0.34], [82.41, 'sine', 0.2], [110, 'triangle', 0.16], [164.81, 'triangle', 0.05]].forEach(([f, type, level], i) => {
       const o = ctx.createOscillator();
       o.type = type; o.frequency.value = f; o.detune.value = (Math.random() - 0.5) * 10;
@@ -90,24 +96,14 @@ export function createAudio() {
     fl.connect(flDepth).connect(droneF.frequency);
     fl.start();
 
-    // Air: noise through a slowly wandering band-pass.
-    const air = ctx.createBufferSource();
-    air.buffer = noise; air.loop = true;
-    const airF = ctx.createBiquadFilter();
-    airF.type = 'bandpass'; airF.frequency.value = 900; airF.Q.value = 0.7;
-    const airG = ctx.createGain();
-    airG.gain.value = 0.02;
-    air.connect(airF).connect(airG).connect(bus(0.8));
-    air.start();
-
-    // Pen scratch: noise, band-passed high, loudness driven by the pen.
+    // Pen scratch: a thin, high band of noise, loudness driven by the pen.
     const scr = ctx.createBufferSource();
     scr.buffer = noise; scr.loop = true; scr.playbackRate.value = 1.4;
     const scrF = ctx.createBiquadFilter();
-    scrF.type = 'bandpass'; scrF.frequency.value = 3600; scrF.Q.value = 1.1;
+    scrF.type = 'bandpass'; scrF.frequency.value = 5200; scrF.Q.value = 2.4;
     const scrG = ctx.createGain();
     scrG.gain.value = 0;
-    scr.connect(scrF).connect(scrG).connect(bus(0.25));
+    scr.connect(scrF).connect(scrG).connect(bus(0.15, 'fx'));
     scr.start();
 
     // Servos: a filtered sawtooth whose pitch and level follow the arm's speed.
@@ -117,10 +113,10 @@ export function createAudio() {
     srvF.type = 'lowpass'; srvF.frequency.value = 650; srvF.Q.value = 5;
     const srvG = ctx.createGain();
     srvG.gain.value = 0;
-    srv.connect(srvF).connect(srvG).connect(bus(0.2));
+    srv.connect(srvF).connect(srvG).connect(bus(0.2, 'fx'));
     srv.start();
 
-    n = { meter, master, verbOut, droneF, airF, airG, scrF, scrG, srv, srvF, srvG, bus, noise, sfx: bus(0.35), bells: bus(0.9), pulse: bus(0.3) };
+    n = { meter, master, verbOut, droneF, scrF, scrG, srv, srvF, srvG, noise, sfx: bus(0.35, 'fx'), bells: bus(0.9, 'music'), pulse: bus(0.3, 'music') };
     nextBell = ctx.currentTime + 2;
     nextPulse = ctx.currentTime + 1;
   }
@@ -172,6 +168,13 @@ export function createAudio() {
 
   return {
     get enabled() { return enabled; },
+    get volume() { return { ...volume }; },
+    /** group: 'music' | 'fx', value 0..1; remembered for the next visit. */
+    setVolume(group, value) {
+      volume[group] = value;
+      try { localStorage.setItem('wk-volume', JSON.stringify(volume)); } catch {}
+      if (ctx) groups[group].forEach((g) => set(g.gain, value, 0.05));
+    },
     /** Debug: output level right now, { rms, peak } in dBFS. */
     level() {
       if (!n) return null;
@@ -203,14 +206,11 @@ export function createAudio() {
      */
     update({ projects = 0, about = 0, contact = 0, inspect = 0, scratch = 0, servo = 0 }) {
       if (!ctx || !enabled) return;
-      state = { projects, about, contact };
       set(n.droneF.frequency, 380 + projects * 520 + about * 1100 - contact * 120 + inspect * 300, 0.8);
       set(n.verbOut.gain, 0.5 + about * 0.4, 0.8);
-      set(n.airG.gain, 0.018 + about * 0.025, 0.8);
-      set(n.airF.frequency, 700 + projects * 500 + about * 1500, 1.5);
       set(n.master.gain, MASTER * (1 - contact * 0.3), 1.0);
-      set(n.scrG.gain, 0.16 * scratch, 0.03);
-      set(n.scrF.frequency, 2800 + scratch * 1600, 0.05);
+      set(n.scrG.gain, 0.05 * scratch, 0.03);
+      set(n.scrF.frequency, 4600 + scratch * 1400, 0.05);
       set(n.srvG.gain, 0.045 * servo, 0.06);
       set(n.srv.frequency, 62 + servo * 95, 0.06);
       set(n.srvF.frequency, 450 + servo * 900, 0.06);
@@ -238,7 +238,7 @@ export function createAudio() {
       o.connect(g).connect(n.sfx); o.start(t); o.stop(t + 0.06);
     },
     /** Camera moves: in (up) or back out (down). */
-    whoosh(up = true) { burst(up ? { from: 300, to: 2600, dur: 1.1, level: 0.09 } : { from: 2200, to: 260, dur: 0.9, level: 0.07 }); },
+    whoosh(up = true) { burst(up ? { from: 500, to: 2400, dur: 0.9, level: 0.03, q: 2 } : { from: 2000, to: 420, dur: 0.7, level: 0.025, q: 2 }); },
     /** The smallest possible hover tick. */
     tick() {
       if (!enabled) return;

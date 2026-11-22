@@ -116,6 +116,12 @@ async function init() {
   const syncToggle = () => soundToggle.setAttribute('aria-pressed', String(audio.enabled));
   soundToggle.addEventListener('click', async () => { await audio.setEnabled(!audio.enabled); syncToggle(); });
   document.addEventListener('visibilitychange', () => audio.setHidden(document.hidden));
+  // Volume sliders (music / effects), remembered between visits.
+  const volMusic = $('#vol-music'), volFx = $('#vol-fx');
+  volMusic.value = audio.volume.music;
+  volFx.value = audio.volume.fx;
+  volMusic.addEventListener('input', () => audio.setVolume('music', +volMusic.value));
+  volFx.addEventListener('input', () => { audio.setVolume('fx', +volFx.value); audio.tick(); });
   gate.setProgress(0.18, 'loading portrait…');
 
   const canvas = $('#gl');
@@ -207,7 +213,9 @@ async function init() {
   const CELL = { xMin: -1.25, xMax: 2.25, yMin: -2.05, yMax: 1.5 };
   function layout() {
     const w = viewW(), h = viewH();
-    renderer.setSize(w, h, false);
+    // Both layers get the same explicit px size from the same (scrollbar-free) viewport,
+    // so the HTML cards always sit exactly in their WebGL frames.
+    renderer.setSize(w, h, true);
     cssRenderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();

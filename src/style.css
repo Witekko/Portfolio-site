@@ -31,8 +31,6 @@ body {
 html.is-locked { overflow: hidden; }
 /* First screen stays put while the signature is written and the head is built. */
 html.is-intro { overflow: hidden; }
-/* Reserve the scrollbar's space, so locking scroll never shifts the layout. */
-html { scrollbar-gutter: stable; }
 main, .rail { transition: opacity .5s ease; }
 body.is-about main, body.is-about .rail, body.is-about #css3d { opacity: 0; pointer-events: none; }
 body.is-inspect main, body.is-inspect .rail { opacity: 0; pointer-events: none; }
@@ -261,4 +259,18 @@ h2 { margin: 0; font-size: clamp(36px, 4.4vw, 64px); line-height: 1; letter-spac
   .gate-brand span, .sound-toggle .bars i { animation: none !important; }
   .sound-toggle[aria-pressed="true"] .bars i { height: 8px; }
 }
+/* volume sliders: open under the switch on hover or keyboard focus */
+.sound { position: relative; display: inline-flex; }
+.sound-panel {
+  position: absolute; top: 100%; left: 50%; z-index: 25; width: 210px; margin-top: 8px; padding: 14px 16px;
+  display: grid; gap: 12px; border-radius: 14px; border: 1px solid var(--line);
+  background: rgba(6, 14, 34, .9); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  opacity: 0; visibility: hidden; transform: translate(-50%, -4px);
+  transition: opacity .2s, transform .2s, visibility 0s .2s;
+}
+.sound-panel::before { content: ""; position: absolute; left: 0; right: 0; top: -12px; height: 12px; }   /* hover bridge */
+.sound:hover .sound-panel, .sound:focus-within .sound-panel { opacity: 1; visibility: visible; transform: translate(-50%, 0); transition-delay: 0s; }
+.sound-panel label { display: grid; grid-template-columns: 58px 1fr; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+.sound-panel input { width: 100%; accent-color: var(--hot); cursor: pointer; }
 @media (max-width: 860px) { .sound-toggle .mono { display: none; } }
+@media (hover: none) { .sound-panel { display: none; } }
