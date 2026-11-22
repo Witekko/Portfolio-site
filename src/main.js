@@ -158,8 +158,8 @@ async function init() {
     F.ikeChart(N), F.thesisNetwork(N), F.sigmaTowers(N), F.gyroscope(N), F.lineFollower(N), F.ticTacToe(N), F.browserWindow(N),
     sig,
   ];
-  // About chapters, in order: hello, 4 stops on the line, off hours.
-  const aboutForms = [F.careerHelix(N), F.robotArm(N), formations[3], F.railWagon(N), F.neuralLoading(N), F.rubiksCube(N)];
+  // About chapters, in order: hello, 5 stops on the line (03 is two: by day and evenings), off hours.
+  const aboutForms = [F.careerHelix(N), F.robotArm(N), formations[3], F.railWagon(N), formations[2], F.neuralLoading(N), F.rubiksCube(N)];
   const get = (k) => (typeof k === 'string' ? aboutForms[Number(k.slice(1))] : formations[k]);
 
   /* ---- geometry ---- */
@@ -228,7 +228,8 @@ async function init() {
   if (journey) scene.add(journey.group);
   const veil = aboutEl.querySelector('.j-veil');
   const J_CUT = 0.42;            // About tween: before this the camera dives into the face, after it the ride
-  const JOURNEY_TIME = 3.0;
+  const JOURNEY_TIME = 3.0;      // in, and out over the finish line (a reward, it can take its time)
+  const JOURNEY_OUT = 1.8;       // out with Back / Esc: the visitor wants out, so quicker
 
   /* ---- layout ---- */
   let scale = 1;
@@ -357,7 +358,7 @@ async function init() {
   let aboutTarget = 0, aboutT = 0, aboutFrom = 1, lastFocus = null, aboutShown = 0;
   // How the ride is entered and left: 'face' dives through the face (from the hero), 'robot'
   // goes down past the robot arm into its floor (from the projects, and back out to them).
-  let portal = 'face', exitTo = null;
+  let portal = 'face', exitTo = null, slowExit = false;
   const closeBtn = $('#about-close');
   const about = (aboutCtl = createAbout({ audio }));
   function openAbout() {
@@ -382,6 +383,7 @@ async function init() {
     if (aboutTarget === 0) return;
     aboutTarget = 0;
     exitTo = journey && to ? to : null;
+    slowExit = !!exitTo;
     if (exitTo) portal = 'robot';
     if (journey) journey.exit(); else about.close();
     audio.whoosh(false);
@@ -603,11 +605,12 @@ async function init() {
     else fDisp += (target - fDisp) * Math.min(1, dt * 7);
 
     // About tween
-    aboutT = clamp01(aboutT + (aboutTarget ? 1 : -1) * dt / (reduceMotion ? 0.01 : journey ? JOURNEY_TIME : ABOUT_TIME));
+    aboutT = clamp01(aboutT + (aboutTarget ? 1 : -1) * dt / (reduceMotion ? 0.01 : journey ? (aboutTarget || slowExit ? JOURNEY_TIME : JOURNEY_OUT) : ABOUT_TIME));
     if (aboutTarget === 0 && aboutT === 0 && !aboutEl.hidden && !aboutEl.classList.contains('is-open')) {
       aboutEl.hidden = true;
       aboutEl.classList.remove('is-journey');
       document.body.classList.remove('is-about');
+      slowExit = false;
     }
     const a = easeInOut(aboutT);
     // The ride: dive (aboutT < J_CUT), a black frame at the cut, then the brain-planet.
@@ -651,7 +654,7 @@ async function init() {
     } else if (aboutT > 0 && !journey) {
       const ch = about.chapter();
       aboutShown += (ch - aboutShown) * Math.min(1, dt * 5);
-      const ci = Math.min(4, Math.floor(aboutShown)), cf = smoothstep(0.2, 0.8, aboutShown - ci);
+      const ci = Math.min(aboutForms.length - 2, Math.floor(aboutShown)), cf = smoothstep(0.2, 0.8, aboutShown - ci);
       if (aboutT < 1) { setPair(aboutFrom, 'A' + Math.round(aboutShown)); uniforms.uMix.value = a; }
       else { setPair('A' + ci, 'A' + (ci + 1)); uniforms.uMix.value = cf; }
       uniforms.uWrite.value = 1;

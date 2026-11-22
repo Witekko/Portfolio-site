@@ -18,45 +18,72 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import * as F from './formations.js';
 
-const RP = 6;                 // planet radius
+const RP = 5;                 // planet radius
+const K = RP / 6;             // positions below are written for a radius-6 planet and scaled by this
 const LIFT = 0.012;           // the line sits just above the surface
-const VMAX = 3.4, FRICTION = 1.5, ACCEL = 5;
+const VMAX = 3.8, FRICTION = 1.5, ACCEL = 5.5, BOOST = 2.4;
 
-// Where things are along the line (world units from the start).
-// Stops stand to the right of the line (the description card is on the left).
+// Where things are along the line (world units from the start, before scaling by K).
+// Stops stand to the right of the line, in the same order as the .station items in index.html.
+// 03 is two stops: the job by day (right), IKE Tracker in the evenings (left), side by side
+// because both count.
 const STOPS = [
   { s: 7, side: 2.3, make: F.robotArm },
-  { s: 14, side: 2.5, make: F.thesisNetwork },
-  { s: 21, side: 2.6, make: F.railWagon },
-  { s: 30.5, side: 2.4, make: F.neuralLoading },
+  { s: 13.6, side: 2.5, make: F.thesisNetwork },
+  { s: 19.8, side: 2.6, make: F.railWagon },
+  { s: 26.0, side: -2.1, make: F.ikeChart },
+  { s: 31.6, side: 2.4, make: F.neuralLoading },
 ];
-const PIT = { s: 35.2, side: 2.2, make: F.rubiksCube };   // off hours: the cube by the line
-const ML_FROM = 26.5, ML_TO = 33.2;   // the dashed stretch: still being built
-const GATE_AT = 1.6;          // a gantry with the stop's name stands this far before it; you drive under it
-const START_GATE = 0.9;       // the line is a closed lap: start and finish are the same gantry
+// The universities stand across the line from the first two stops.
+const CAMPUS = [
+  { s: 7.7, side: -2.6, make: F.campusTech },
+  { s: 16.2, side: -2.3, make: F.campusEcon },
+];
+const PIT = { s: 36.4, side: 2.2, make: F.rubiksCube };   // off hours: the cube by the line
+const ML_FROM = 27.6, ML_TO = 34.0;   // the dashed stretch: still being built (scaled where used)
+const GATE_AT = 1.6 * K;      // a gantry with the stop's name stands this far before it; you drive under it
+const START_GATE = 0.9 * K;   // the line is a closed lap: start and finish are the same gantry
 // Skills on the line, grouped by the stop they belong to. `info` is what the inventory shows on hover.
-const W1 = '01 · robotics', W2 = '02 · thesis', W3 = '03 · rail data', WP = 'side project · IKE Tracker';
+const W1 = '01 · robotics', W2 = '02 · thesis', W3 = '03 · by day · rail data', WP = '03 · evenings · IKE Tracker';
 const TOKENS = [
   ['C++', 'C++', 2.6, W1, 'My B.Eng. game: Qt bent into a game engine, played with a gyroscope.'],
   ['C#', 'C#', 3.6, W1, 'Learned from zero in Unity for my remake of Age of War.'],
   ['Arduino & STM32', 'STM', 4.6, W1, 'Microcontrollers for sensors and motors, like the line follower that started all this.'],
   ['ABB & FANUC robots', 'ABB', 5.6, W1, 'Programming industrial robot arms in the Automation & Robotics labs.'],
-  ['Statistics', 'STAT', 9.6, W2, 'Spearman rank correlations with Benjamini–Hochberg correction, in my master’s thesis.'],
-  ['Survey research', 'SURV', 10.6, W2, 'A survey of 50 viewers of G2 content, tied to seven composite indices.'],
-  ['Python', 'PY', 11.6, W2, 'My main language for data: analysis, scripts and the IKE Tracker backend.'],
-  ['Pandas', 'PD', 12.6, W2, 'Cleaning and joining data, from survey answers to broker exports.'],
-  ['SQL', 'SQL', 16.6, W3, 'Getting production and work-order data out of the systems it lives in.'],
-  ['Power BI (DAX)', 'DAX', 17.6, W3, 'Dashboards and DAX measures that turn that data into something people read.'],
-  ['Power Platform', 'PP', 18.6, W3, 'Apps and flows that automate business processes at work.'],
-  ['ERP & MES', 'ERP', 19.6, W3, 'Integrating, maintaining and improving the tools around production.'],
-  ['Django', 'DJ', 22.6, WP, 'The full-stack framework behind IKE Tracker, my investment app.'],
-  ['NumPy', 'NP', 23.3, WP, 'The number crunching under returns and allocations.'],
-  ['JavaScript', 'JS', 24, WP, 'Front ends: the IKE Tracker dashboard and this site in Three.js.'],
-  ['Chart.js', 'CHT', 24.7, WP, 'TWR/MWR performance and asset-allocation charts.'],
-  ['Git & GitHub', 'GIT', 25.4, WP, 'Version control for every project; this site deploys from GitHub.'],
-  ['Docker', 'DKR', 26.1, WP, 'Containers to run and ship the apps.'],
-  ['next level', '?', 28.4, '', '', true], ['next level', '?', 29.2, '', '', true], ['next level', '?', 31.4, '', '', true],
-].map(([name, short, s, where, info, locked = false]) => ({ name, short, s, where, info, locked }));
+  ['Statistics', 'STAT', 9.2, W2, 'Spearman rank correlations with Benjamini–Hochberg correction, in my master’s thesis.'],
+  ['Survey research', 'SURV', 10.1, W2, 'A survey of 50 viewers of G2 content, tied to seven composite indices.'],
+  ['Python', 'PY', 11.0, W2, 'My main language for data: analysis, scripts and the IKE Tracker backend.'],
+  ['Pandas', 'PD', 11.9, W2, 'Cleaning and joining data, from survey answers to broker exports.'],
+  ['SQL', 'SQL', 15.4, W3, 'Getting production and work-order data out of the systems it lives in.'],
+  ['Power BI (DAX)', 'DAX', 16.3, W3, 'Dashboards and DAX measures that turn that data into something people read.'],
+  ['Power Platform', 'PP', 17.2, W3, 'Apps and flows that automate business processes at work.'],
+  ['ERP & MES', 'ERP', 18.1, W3, 'Integrating, maintaining and improving the tools around production.'],
+  ['Django', 'DJ', 21.2, WP, 'The full-stack framework behind IKE Tracker, my investment app.'],
+  ['NumPy', 'NP', 21.9, WP, 'The number crunching under returns and allocations.'],
+  ['JavaScript', 'JS', 22.6, WP, 'Front ends: the IKE Tracker dashboard and this site in Three.js.'],
+  ['Chart.js', 'CHT', 23.3, WP, 'TWR/MWR performance and asset-allocation charts.'],
+  ['Git & GitHub', 'GIT', 24.0, WP, 'Version control for every project; this site deploys from GitHub.'],
+  ['Docker', 'DKR', 24.7, WP, 'Containers to run and ship the apps.'],
+  ['next level', '?', 29.0, '', '', true], ['next level', '?', 29.8, '', '', true], ['next level', '?', 32.6, '', '', true],
+].map(([name, short, s, where, info, locked = false]) => ({ name, short, s: s * K, where, info, locked }));
+// Memories on the left: the projects, as particle shapes next to the skills they were built with.
+const MEMORIES = [
+  { s: 1.9, side: -1.55, make: F.lineFollower, label: 'Line Follower · the cardboard original' },
+  { s: 3.4, side: -1.6, make: F.ticTacToe, label: 'Tic-Tac-Toe · my first algorithm' },
+  { s: 4.9, side: -1.6, make: F.gyroscope, label: 'Dance Game · C++ & Qt' },
+  { s: 6.3, side: -1.6, make: F.sigmaTowers, label: 'Age of Sigma · C# & Unity' },
+  { s: 38.4, side: -1.55, make: F.browserWindow, label: 'This website · Three.js · you are here' },
+].map((m) => ({ ...m, s: m.s * K }));
+// Synapses: arches of light over the line that fire as you pass under them.
+// The one at 20.9 is dusk: from the job to the evenings.
+const ARCHES = [8.3, 10.55, 20.9, 27.0, 28.4, 33.3, 37.5, 39.0].map((s) => ({ s: s * K, cool: s > ML_FROM && s < ML_TO + 1 }));
+// The rail-data stretch runs on sleepers and rails.
+const RAILS_FROM = 14.4 * K, RAILS_TO = 20.6 * K;
+// Boost pads: drive over one and it throws you forward.
+const PADS = [7.8, 14.2, 20.4].map((s) => s * K);
+STOPS.forEach((st) => { st.s *= K; });
+CAMPUS.forEach((c) => { c.s *= K; });
+PIT.s *= K;
 
 const R = Math.random;
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
@@ -118,7 +145,20 @@ const DOT_FS = /* glsl */`
   }
 `;
 
-function buildBrain(n) {
+// Each stretch of the lap lies over its own lobe, tinted a little differently (unscaled s, colour).
+const LOBES = [[0, [1.0, 0.74, 0.48]], [8.6, [0.8, 0.62, 1.0]], [14.4, [0.45, 0.95, 0.92]], [20.8, [0.58, 1.0, 0.66]], [27.6, [0.86, 0.93, 1.0]], [34.6, [1.0, 0.62, 0.38]], [39.4, [1.0, 0.74, 0.48]]];
+function lobeTint(su) {
+  for (let i = 0; i < LOBES.length - 1; i++) {
+    const [a, ca] = LOBES[i], [b, cb] = LOBES[i + 1];
+    if (su < b || i === LOBES.length - 2) {
+      const m = smoothstep(b - 1.2, b + 1.2, su);   // blend across the border
+      return ca.map((c, j) => c + (cb[j] - c) * m);
+    }
+  }
+  return LOBES[0][1];
+}
+
+function buildBrain(n, path) {
   const pos = new Float32Array(n * 3), col = new Float32Array(n * 3), size = new Float32Array(n);
   let i = 0;
   while (i < n) {
@@ -133,8 +173,9 @@ function buildBrain(n) {
     if (R() > 0.07 + 0.93 * crest) continue;            // dots gather on the crests, the grooves stay dark
     const r = RP * (0.999 + crest * 0.007);
     pos.set([x * r, y * r, z * r], i * 3);
-    const c = F.blue(0.3 + 0.6 * crest);
-    col.set(c, i * 3);
+    const lum = 0.3 + 0.6 * crest;
+    const c = F.blue(lum), tint = lobeTint(path.along(x, y, z) / path.total * 39.4);
+    col.set(c.map((v, j) => v * 0.7 + tint[j] * lum * 0.3), i * 3);
     size[i] = 0.6 + R() * 0.8;
     i++;
   }
@@ -200,7 +241,13 @@ function buildPath() {
     f.right.crossVectors(f.fwd, f.up);
     return f;
   };
-  return { total, point, frame };
+  /** Roughly how far along the lap a point on the sphere lies (for tinting the brain by region). */
+  const along = (x, y, z) => {
+    let u = Math.atan2(x * E2.x + y * E2.y + z * E2.z, x * E1.x + y * E1.y + z * E1.z);
+    if (u < 0) u += Math.PI * 2;
+    return (u / (Math.PI * 2)) * total;
+  };
+  return { total, point, frame, along };
 }
 
 const LINE_VS = /* glsl */`
@@ -256,7 +303,7 @@ function buildLine(path) {
   geo.setAttribute('aS', new THREE.BufferAttribute(aS, 1));
   geo.setAttribute('aSide', new THREE.BufferAttribute(aSide, 1));
   geo.setIndex(index);
-  const uniforms = { uS: { value: 0 }, uDash: { value: ML_FROM }, uDashTo: { value: ML_TO }, uTime: { value: 0 } };
+  const uniforms = { uS: { value: 0 }, uDash: { value: ML_FROM * K }, uDashTo: { value: ML_TO * K }, uTime: { value: 0 } };
   const mesh = new THREE.Mesh(geo, new THREE.ShaderMaterial({ vertexShader: LINE_VS, fragmentShader: LINE_FS, uniforms, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
   mesh.renderOrder = 2;
   mesh.frustumCulled = false;
@@ -422,6 +469,114 @@ function drawGantry(canvas, { kicker = '', title = '', tone = 'hot', progress = 
   }
 }
 
+/* ------------------------------------------------------------- scenery -- */
+
+// A synapse: two strands of light arching over the line. A pulse runs along it now and
+// then, and the whole arch fires when the robot passes under it.
+const ARCH_VS = /* glsl */`
+  uniform float uSize, uTime, uPhase, uFire;
+  uniform vec3 uCol, uHot;
+  attribute float aT;
+  attribute float aR;
+  varying vec3 vC;
+  varying float vA;
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * mv;
+    float D = -mv.z;
+    gl_PointSize = clamp(uSize * (0.6 + aR * 0.8) / D, 1.0, 7.0);
+    float head = fract(uTime * 0.38 + uPhase) * 1.6 - 0.3;
+    float p = exp(-pow((aT - head) * 8.0, 2.0));
+    float lit = max(p, uFire);
+    vC = mix(uCol, uHot, lit) * (1.0 + lit * 1.3);
+    vA = (0.32 + 0.68 * lit) * (1.0 - smoothstep(5.5, 8.5, D)) * smoothstep(0.15, 0.7, D);
+  }
+`;
+
+function buildArch(cool) {
+  const N = 900, hw = 1.15, hh = 1.32;
+  const pos = new Float32Array(N * 3), aT = new Float32Array(N), aR = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const t = R(), th = t * Math.PI, strand = i % 2;
+    const twist = Math.sin(th * 7 + strand * Math.PI) * 0.055;
+    const j = () => (R() - 0.5) * 0.03;
+    pos.set([-hw * Math.cos(th) + j(), hh * Math.sin(th) + j() + twist * 0.4, twist + j()], i * 3);
+    aT[i] = t;
+    aR[i] = R();
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aT', new THREE.BufferAttribute(aT, 1));
+  geo.setAttribute('aR', new THREE.BufferAttribute(aR, 1));
+  const uniforms = {
+    uSize: { value: 30 }, uTime: { value: 0 }, uPhase: { value: R() }, uFire: { value: 0 },
+    uCol: { value: new THREE.Color(cool ? 0x6f86b8 : 0x5b8cff) }, uHot: { value: new THREE.Color(cool ? 0xd8e4ff : 0xffa36b) },
+  };
+  const pts = new THREE.Points(geo, new THREE.ShaderMaterial({ vertexShader: ARCH_VS, fragmentShader: DOT_FS, uniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  pts.frustumCulled = false;
+  pts.rotation.y = (R() - 0.5) * 0.6;   // each one leans its own way
+  const g = new THREE.Group();
+  g.add(pts);
+  return { g, uniforms };
+}
+
+/** Sleepers and two steel rails along the line, from s0 to s1. */
+function buildRails(path, s0, s1) {
+  const g = new THREE.Group();
+  const f = { p: new THREE.Vector3(), up: new THREE.Vector3(), fwd: new THREE.Vector3(), right: new THREE.Vector3() };
+  const step = 0.17, n = Math.floor((s1 - s0) / step);
+  const sleepers = new THREE.InstancedMesh(new THREE.BoxGeometry(0.44, 0.01, 0.045), new THREE.MeshStandardMaterial({ color: 0x252c44, roughness: 0.85, metalness: 0.1 }), n);
+  const m = new THREE.Matrix4(), back = new THREE.Vector3();
+  for (let i = 0; i < n; i++) {
+    path.frame(s0 + i * step, f);
+    m.makeBasis(f.right, f.up, back.copy(f.fwd).negate());
+    m.setPosition(f.p.clone().multiplyScalar((RP + 0.004) / RP));
+    sleepers.setMatrixAt(i, m);
+  }
+  const railMat = new THREE.MeshStandardMaterial({ color: 0xa9bcdf, metalness: 0.9, roughness: 0.25, emissive: 0x1a2440, side: THREE.DoubleSide });
+  for (const off of [-0.165, 0.165]) {
+    const k = Math.floor((s1 - s0) / 0.05) + 1;
+    const pos = new Float32Array(k * 2 * 3), index = [];
+    for (let i = 0; i < k; i++) {
+      path.frame(s0 + i * 0.05, f);
+      const c = f.p.clone().multiplyScalar((RP + 0.02) / RP).addScaledVector(f.right, off);
+      for (let e = 0; e < 2; e++) pos.set(c.clone().addScaledVector(f.right, (e ? 1 : -1) * 0.012).toArray(), (i * 2 + e) * 3);
+      if (i) { const a = (i - 1) * 2; index.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setIndex(index);
+    geo.computeVertexNormals();
+    g.add(new THREE.Mesh(geo, railMat));
+  }
+  g.add(sleepers);
+  return g;
+}
+
+/** A boost pad: chevrons on the line that stream forward. */
+function buildPad() {
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 256;
+  const x = c.getContext('2d');
+  x.lineWidth = 16; x.lineCap = 'round'; x.lineJoin = 'round';
+  for (let i = 0; i < 3; i++) {
+    const y = 60 + i * 80;
+    x.strokeStyle = i === 0 ? '#fff1e6' : '#ff8a3d';
+    x.shadowColor = '#ff6a1a'; x.shadowBlur = 14;
+    x.beginPath(); x.moveTo(22, y + 34); x.lineTo(64, y - 6); x.lineTo(106, y + 34); x.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapT = THREE.RepeatWrapping;
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.36), mat);
+  mesh.rotation.x = -Math.PI / 2;   // flat on the ground, the chevrons pointing along the line
+  mesh.renderOrder = 3;
+  const g = new THREE.Group();
+  g.add(mesh);
+  return { g, tex, mat };
+}
+
 /* ---------------------------------------------------------------- robot -- */
 
 function buildRobot() {
@@ -489,17 +644,19 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
   key.position.set(-2, 4, 3);
   group.add(key);
 
-  const brain = buildBrain(small ? 45000 : 95000);
+  const path = buildPath();
+  const brain = buildBrain(small ? 32000 : 68000, path);
   const stars = buildStars(small ? 600 : 1200);
   // A solid dark core: hides the far side of the planet (and of the line) and gives the folds depth.
   const core = new THREE.Mesh(new THREE.SphereGeometry(RP * 0.993, 96, 64), new THREE.MeshBasicMaterial({ color: 0x040a1c }));
   planet.add(core, brain.pts, stars.pts);
-  const path = buildPath();
   const line = buildLine(path);
   planet.add(line.mesh);
 
-  const stations = [...STOPS, PIT].map((st) => {
-    const { pts, uniforms } = buildStation(st.make(small ? 5000 : 9000), st === PIT ? 1.3 : 1.8);
+  // Stops, the pit, and the university buildings behind the first two stops.
+  const stations = [...STOPS, PIT, ...CAMPUS].map((st) => {
+    const campus = CAMPUS.includes(st);
+    const { pts, uniforms } = buildStation(st.make(small ? (campus ? 6000 : 5000) : (campus ? 11000 : 9000)), st === PIT ? 1.3 : campus ? 2.3 : 1.8);
     const holder = new THREE.Group();
     holder.add(pts);
     placeOnPath(path, holder, st.s, st.side * (small ? 0.62 : 1));   // phones see less to the sides
@@ -531,7 +688,32 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
     planet.add(gantry.g);
     return { ...gt, gantry };
   });
-  const drawGates = () => gates.forEach((gt) => gt.gantry.draw(gt.start ? (s > 20 ? FINISH_SPEC : START_SPEC) : gt.spec()));
+  const drawGates = () => gates.forEach((gt) => gt.gantry.draw(gt.start ? (s > L / 2 ? FINISH_SPEC : START_SPEC) : gt.spec()));
+
+  // Scenery: project memories on the left, synapse arches, rails, boost pads.
+  const MEM_SCALE = 0.95;
+  const memories = MEMORIES.map((mem) => {
+    const { pts, uniforms } = buildStation(mem.make(small ? 3000 : 5500), MEM_SCALE);
+    const holder = new THREE.Group();
+    holder.add(pts);
+    placeOnPath(path, holder, mem.s, mem.side * (small ? 0.62 : 1));
+    planet.add(holder);
+    return { ...mem, holder, uniforms };
+  });
+  const arches = ARCHES.map((a) => {
+    const arch = buildArch(a.cool);
+    placeOnPath(path, arch.g, a.s, 0);
+    planet.add(arch.g);
+    return { ...a, ...arch, firedAt: -1e9 };
+  });
+  planet.add(buildRails(path, RAILS_FROM, RAILS_TO));
+  const pads = PADS.map((ps) => {
+    const pad = buildPad();
+    placeOnPath(path, pad.g, ps, 0, LIFT + 0.003);
+    planet.add(pad.g);
+    return { s: ps, ...pad, hitAt: -1e9 };
+  });
+  let boostAt = -1e9;
 
   // Tokens: hexagonal coins on the line.
   const coinGeo = new THREE.CylinderGeometry(0.075, 0.075, 0.022, 6);
@@ -566,10 +748,13 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
   pop.className = 'j-pop';
   pop.id = 'j-pop';
   pop.setAttribute('role', 'tooltip');
-  pop.hidden = true;
+  pop.setAttribute('aria-hidden', 'true');
   inv.appendChild(pop);
-  let popFor = null;
+  let popFor = null, popTimer = 0;
   const showPop = (t) => {
+    clearTimeout(popTimer);
+    const already = pop.classList.contains('is-on');
+    pop.classList.toggle('is-instant', already);   // sliding along the slots: no fade between them
     popFor = t;
     const [title, where, text] = t.locked
       ? ['Locked', 'next level', 'Machine learning: models that learn from the kind of data I already work with. Still being built.']
@@ -580,13 +765,19 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
     const p = document.createElement('p'); p.textContent = text;
     pop.append(b, w, p);
     pop.classList.toggle('is-locked', t.locked || !t.got);
-    pop.hidden = false;
+    pop.classList.add('is-on');
+    pop.setAttribute('aria-hidden', 'false');
     const r = t.slot.getBoundingClientRect(), ir = inv.getBoundingClientRect();
     const pw = pop.offsetWidth;
     const cx = Math.max(12 + pw / 2, Math.min(innerWidth - 12 - pw / 2, r.left + r.width / 2));
     pop.style.left = `${cx - ir.left}px`;
   };
-  const hidePop = () => { pop.hidden = true; popFor = null; };
+  const hidePop = () => {
+    clearTimeout(popTimer);
+    pop.classList.remove('is-on', 'is-instant');
+    pop.setAttribute('aria-hidden', 'true');
+    popFor = null;
+  };
   tokens.forEach((t) => {
     const li = document.createElement('li');
     li.className = t.locked ? 'locked' : '';
@@ -594,29 +785,44 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
     li.tabIndex = 0;
     li.setAttribute('aria-label', t.locked ? 'Locked skill' : t.name);
     li.setAttribute('aria-describedby', 'j-pop');
-    li.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') showPop(t); });
-    li.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') hidePop(); });
+    li.addEventListener('pointerenter', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      clearTimeout(popTimer);
+      if (pop.classList.contains('is-on')) showPop(t);
+      else popTimer = setTimeout(() => showPop(t), 120);   // passing over the bar on the way somewhere does not pop it
+    });
+    li.addEventListener('pointerleave', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      clearTimeout(popTimer);
+      popTimer = setTimeout(hidePop, 80);   // a short grace period, so the next slot can take over
+    });
     li.addEventListener('focus', () => showPop(t));
     li.addEventListener('blur', hidePop);
     li.addEventListener('click', () => (popFor === t && !matchMedia('(hover: hover)').matches ? hidePop() : showPop(t)));
     slots.appendChild(li);
     t.slot = li;
     const lab = document.createElement('span');
-    lab.textContent = t.locked ? 'locked' : t.name;
     lab.className = t.locked ? 'locked' : '';
+    lab.appendChild(document.createElement('b')).textContent = t.locked ? 'locked' : t.name;
     labels.appendChild(lab);
     t.label = lab;
+  });
+  memories.forEach((m) => {
+    const lab = document.createElement('span');
+    lab.className = 'mem';
+    lab.appendChild(document.createElement('b')).textContent = m.label;
+    labels.appendChild(lab);
+    m.tag = lab;
+    m.tagW = 0;
   });
   // Card texts come from the static About (the version without WebGL), so there is one source.
   const st = stEls;
   const cards = [
-    { from: -1, to: 1.4, kicker: 'about me', title: root.querySelector('#about-title').textContent, text: root.querySelector('.about-hello .lead').textContent },
-    ...STOPS.map((stop, i) => ({ from: stop.s - 4.2, to: stop.s + 2.2, kicker: st[i].querySelector('.station-n').textContent.replace(/\s+/g, ' ').trim(), title: st[i].querySelector('h3').textContent, text: st[i].querySelector('p:not(.station-n):not(.loading)').textContent })),
-    { from: PIT.s - 2.5, to: L - 0.6, pit: true, kicker: 'pit stop · off hours', title: 'Cubes, strings, engines', text: '' },
+    { from: -1, to: 1.2 * K, kicker: 'about me', title: root.querySelector('#about-title').textContent, text: root.querySelector('.about-hello .lead').textContent },
+    ...STOPS.map((stop, i) => ({ stop: true, from: stop.s - 4.2 * K, to: stop.s + 2.2 * K, kicker: st[i].querySelector('.station-n').textContent.replace(/\s+/g, ' ').trim(), title: st[i].querySelector('h3').textContent, text: st[i].querySelector('p:not(.station-n):not(.loading)').textContent })),
+    { from: PIT.s - 2.5 * K, to: L - 0.6, pit: true, kicker: 'pit stop · off hours', title: 'Cubes, strings, engines', text: '' },
     { from: L - 0.6, to: 999, finish: true, kicker: 'finish', title: 'Lap complete', text: 'Drive under the finish line: the camera comes up out of my head and over to the projects.' },
   ];
-  // Between the rail-data stop and the ML stretch: the evenings, where most of these skills came from.
-  cards.splice(4, 0, { from: STOPS[2].s + 2.2, to: STOPS[3].s - 4.2, kicker: 'side project · evenings', title: 'IKE Tracker', text: 'A full-stack app for my own investments: Django, Pandas and Chart.js. The project I open every day, and the first one in Projects.' });
   let cardShown = -2;
 
   /* ---- state ---- */
@@ -632,7 +838,7 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
 
   function showToast(text, ms = 2200) {
     toast.textContent = text;
-    toast.hidden = false;
+    toast.classList.add('is-on');
     toastUntil = performance.now() + ms;
   }
 
@@ -664,6 +870,7 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
       if (cardShown !== i) return;
       cardKicker.textContent = c.kicker;
       cardTitle.textContent = c.title;
+      card.classList.toggle('is-stop', !!c.stop);
       const got = tokens.filter((t) => t.got).length;
       if (c.pit) {
         cardText.innerHTML = `Speedcubing (11.84 s single), guitar, Formula 1 and games. ${reaction ? `Your start today: <b>${reaction} ms</b>${best ? ` · best <b>${best} ms</b>` : ''}.` : ''} Skills collected: <b>${got}/${total}</b>. Next here: a cube you can turn and a guitar you can play.`;
@@ -671,12 +878,12 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
         cardText.innerHTML = `${c.text} Skills on board: <b>${got}/${total}</b>.`;
       } else cardText.textContent = c.text;
       card.classList.add('is-in');
-    }, 220);
+    }, 170);   // the old card is out (160ms), then the new one comes in
   }
 
   return {
     group,
-    get speed01() { return Math.abs(v) / VMAX; },
+    get speed01() { return Math.min(1, Math.abs(v) / VMAX); },
     get progress() { return s / S_FIN; },
     /** Length of the lap (the finish line is just past it). */
     get lap() { return L; },
@@ -689,6 +896,8 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
       brain.uniforms.uSize.value = pxu * 0.028;
       stars.uniforms.uSize.value = pxu * 0.05;
       stations.forEach((x) => { x.uniforms.uSize.value = pxu * 0.03; });
+      memories.forEach((x) => { x.uniforms.uSize.value = pxu * 0.026; });
+      arches.forEach((x) => { x.uniforms.uSize.value = pxu * 0.03; });
     },
     /** Called when the About opens. The ride resumes where it was; the lights run on every entry. */
     enter() {
@@ -712,15 +921,15 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
       keys.clear();
       hidePop();
       lightsEl.classList.remove('is-on');
-      toast.hidden = true;
+      toast.classList.remove('is-on');
       hud.classList.remove('is-in');
       card.classList.remove('is-in');
-      labels.querySelectorAll('span').forEach((l) => { l.style.opacity = '0'; });
+      labels.querySelectorAll(':scope > span').forEach((l) => { l.style.opacity = '0'; });
     },
     /** Wheel / swipe: +down = forward. */
     push(delta, timeStamp) {
       if (!react(timeStamp)) return;
-      v = Math.max(-VMAX, Math.min(VMAX, v + delta * 0.0045));
+      v = Math.max(-VMAX, Math.min(Math.max(VMAX, v), v + delta * 0.005));   // a boost may still be above VMAX
     },
     key(e, down) {
       const fwd = ['ArrowUp', 'KeyW', 'PageDown', 'Space', 'ArrowRight', 'KeyD'].includes(e.code);
@@ -767,12 +976,21 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
 
       // Driving: impulses from the wheel, steady push from held keys, friction.
       if (phase === 'drive') {
-        if (keys.has('f')) v = Math.min(VMAX, v + ACCEL * dt);
+        if (keys.has('f') && v < VMAX) v = Math.min(VMAX, v + ACCEL * dt);
         if (keys.has('b')) v = Math.max(-VMAX, v - ACCEL * dt);
         v *= Math.exp(-FRICTION * dt);
         if (Math.abs(v) < 0.01) v = 0;
+        const s0 = s;
         s += v * dt;
         if (s < 0) { s = 0; v = 0; }
+        pads.forEach((pd) => {   // rolling forward over a boost pad
+          if (v > 0 && s0 < pd.s && s >= pd.s && now - pd.hitAt > 1200) {
+            pd.hitAt = now;
+            boostAt = now;
+            v = Math.min(VMAX + BOOST, v + BOOST);
+            audio?.whoosh(true);
+          }
+        });
         if (s >= S_FIN + 0.25) {   // under the finish gantry: the lap is done
           phase = 'finished';
           finishedAt = now;
@@ -803,14 +1021,26 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
       robot.wheels.forEach((wh) => { wh.rotation.x -= (v * dt) / 0.045; });
 
       // Stations assemble as you come near.
-      stations.forEach((x) => { x.uniforms.uK.value = smoothstep(x.s - 9, x.s - 3.5, s); });
+      stations.forEach((x) => { x.uniforms.uK.value = smoothstep(x.s - 7.5 * K, x.s - 3 * K, s); });
+
+      // Memories assemble like the stops; synapses pulse and fire overhead; pads stream.
+      memories.forEach((m) => { m.uniforms.uK.value = smoothstep(m.s - 6 * K, m.s - 2.5 * K, s); });
+      arches.forEach((a) => {
+        a.uniforms.uTime.value = t;
+        if (Math.abs(a.s - s) < 0.12 && now - a.firedAt > 1500) a.firedAt = now;
+        a.uniforms.uFire.value = Math.exp(-(now - a.firedAt) / 420);
+      });
+      pads.forEach((pd) => {
+        pd.tex.offset.y = -t * 1.6;
+        pd.mat.opacity = (0.65 + 0.35 * Math.exp(-(now - pd.hitAt) / 400)) * smoothstep(-0.3, 0.05, pd.s - s);
+      });
 
       // Gantries rise over the horizon ahead and fade once the camera has passed under them.
       gates.forEach((gt) => {
-        const ahead = (gt.start && s > 20 ? S_FIN : gt.s) - s;
-        gt.gantry.setOpacity(smoothstep(7.5, 5, ahead) * smoothstep(-2.6, -1.5, ahead));
+        const ahead = (gt.start && s > L / 2 ? S_FIN : gt.s) - s;
+        gt.gantry.setOpacity(smoothstep(6.5, 4.5, ahead) * smoothstep(-2.6, -1.5, ahead));
       });
-      gates[0].gantry.draw(s > 20 ? FINISH_SPEC : START_SPEC);   // the start gantry turns into the finish
+      gates[0].gantry.draw(s > L / 2 ? FINISH_SPEC : START_SPEC);   // the start gantry turns into the finish
 
       // Tokens: spin, and get collected when the robot rolls over them.
       tokens.forEach((tk) => {
@@ -845,7 +1075,7 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
       if (phase === 'arriving' || phase === 'off' || leaving) ci = -1;
       setCard(ci);
 
-      if (!toast.hidden && now > toastUntil) toast.hidden = true;
+      if (now > toastUntil && toast.classList.contains('is-on')) toast.classList.remove('is-on');
     },
 
     /** Camera: k = 0 high above the planet, 1 = behind the robot. Then token labels follow it. */
@@ -853,21 +1083,44 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
       const e = easeInOut(clamp01(k));
       const chaseFov = w / h < 1 ? 64 : 50;
       const turnSway = Math.max(-0.25, Math.min(0.25, lean * 0.8));
-      const from = new THREE.Vector3(0, -RP + 9.5, 16.5), fromLook = new THREE.Vector3(0, -RP, 0);
+      const from = new THREE.Vector3(0, -RP + 9.5 * K, 16.5 * K), fromLook = new THREE.Vector3(0, -RP, 0);
       const to = new THREE.Vector3(turnSway, 0.5, 1.25), toLook = new THREE.Vector3(turnSway * 0.3, 0.02, -1.8);
       cam.position.lerpVectors(from, to, e);
       cam.up.set(0, 1, 0);
       cam.lookAt(tmp.lerpVectors(fromLook, toLook, e));
-      cam.fov = 40 + (chaseFov - 40) * e;
+      const kick = Math.exp(-(performance.now() - boostAt) / 550);   // a boost widens the view for a moment
+      cam.fov = 40 + (chaseFov - 40) * e + 9 * kick * e;
       cam.updateProjectionMatrix();
       cam.updateMatrixWorld();
       brain.uniforms.uFogNear.value = 5 + (1 - e) * 30;
       brain.uniforms.uFogFar.value = 11 + (1 - e) * 40;
 
       // Labels over the tokens ahead, and chips flying into the inventory.
+      // Memories: a quiet caption over each project shape while it is ahead of you.
+      const memOn = phase !== 'off' && !leaving && k >= 1;
+      memories.forEach((m) => {
+        const ahead = m.s - s;
+        let op = memOn ? smoothstep(4, 2.8, ahead) * smoothstep(0.5, 1.3, ahead) : 0;   // gone before it passes the camera
+        if (op > 0) {
+          m.holder.localToWorld(tmp.set(0, (0.5 + 0.62) * MEM_SCALE, 0));
+          if (blockedByPlanet(cam.position, tmp)) op = 0;
+          else {
+            tmp.project(cam);
+            if (tmp.z < 1) {
+              m.tagW ||= m.tag.offsetWidth;   // the text never changes: measure once
+              const half = m.tagW / 2 + 10;
+              const x = Math.max(half, Math.min(w - half, ((tmp.x + 1) / 2) * w));
+              m.tag.style.transform = `translate(${x}px, ${((1 - tmp.y) / 2) * h}px) translate(-50%, -100%)`;
+            }
+            else op = 0;
+          }
+        }
+        m.tag.style.opacity = String(op);
+      });
+
       // The next token's name stays sharp until you pick it up; the ones after it wait, blurred.
       const vis = phase !== 'off' && !leaving && k >= 1;
-      const near = vis ? tokens.filter((tk) => !tk.got && !tk.seen && tk.s - s > -0.25 && tk.s - s < 5).slice(0, 3) : [];
+      const near = vis ? tokens.filter((tk) => !tk.got && !tk.seen && tk.s - s > -0.25 && tk.s - s < 4.4).slice(0, 3) : [];
       tokens.forEach((tk) => {
         const ahead = tk.s - s;
         const rank = near.indexOf(tk);
@@ -883,7 +1136,7 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
           if (tmp.z < 1) {
             tk.label.style.transform = `translate(${((tmp.x + 1) / 2) * w}px, ${((1 - tmp.y) / 2) * h}px) translate(-50%, -100%)`;
             tk.label.classList.toggle('is-next', rank === 0);
-            tk.label.style.opacity = String(rank === 0 ? smoothstep(5, 3.5, ahead) : 0.6 * smoothstep(5, 3.2, ahead));
+            tk.label.style.opacity = String(rank === 0 ? smoothstep(4.4, 3.1, ahead) : 0.6 * smoothstep(4.4, 2.8, ahead));
           } else tk.label.style.opacity = '0';
         } else tk.label.style.opacity = '0';
         if (tk.fly) {
@@ -903,9 +1156,10 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
           setTimeout(() => {
             chip.remove();
             tk.slot.textContent = tk.short;
-            tk.slot.classList.add('got');
+            tk.slot.classList.add('got', 'landed');   // a small pop as it lands
+            tk.slot.addEventListener('animationend', () => tk.slot.classList.remove('landed'), { once: true });
             if (popFor === tk) showPop(tk);
-          }, 650);
+          }, 470);
         }
       });
     },

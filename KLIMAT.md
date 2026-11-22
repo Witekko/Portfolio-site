@@ -75,6 +75,10 @@ Pierwszy zarys (przewijane rozdziały z linią z boku) odpadł: kamera nie wchod
 - **Jazda:** kółko, strzałki albo przesunięcie palcem to gaz; kamera zza robota jak w grze. Planeta obraca się pod robotem, horyzont się zakrzywia.
 - **Etapy** wyrastają po prawej z cząsteczek: ramię robota, praca o G2, wagon z danymi, sieć ML w 37%. Przed każdym stoi brama nad linią z nazwą etapu (jak na torze), robot przejeżdża pod nią.
 - **Umiejętności** to żetony na linii (z CV); robot je zbiera do ekwipunku na dole. Najbliższy żeton ma ostrą nazwę aż do zebrania, dalsze są rozmyte. Najechanie na slot w ekwipunku pokazuje opis umiejętności i skąd jest. Odcinek ML: linia przerywana i zablokowane żetony „?” (zapadają się w mózg).
+- **Rozdział 03 to dwa równorzędne etapy:** praca „by day” (wagon, tory, po prawej) i IKE Tracker „evenings” (wykres jako stacja, po lewej, własna brama i karta). IKE jest tak samo ważny w szukaniu pracy.
+- **Uczelnie:** budynki z cząsteczek po lewej przy etapach 01 (politechnika: wieża z zegarem, okna laboratoriów, kopuła) i 02 (portyk z kolumnami i szklane skrzydło).
+- **Sceneria:** wspomnienia projektów po lewej z podpisami (line follower, kółko i krzyżyk, gra taneczna, Age of Sigma, ta strona), łuki synaps nad linią, które błyskają przy przejeździe, tory na odcinku kolejowym, 3 pola przyspieszenia, płaty mózgu w lekko innych kolorach. Okrążenie krótsze (mniejsza planeta).
+- **Ruch (przegląd skillem Emila):** wspólne krzywe  i , wyjście szybsze niż wejście (karta, komunikat, Esc 1,8 s zamiast 3 s), okienko w ekwipunku rośnie ze slotu i między slotami przeskakuje bez animacji, hover tylko przy myszy.
 - **Pit stop:** kostka przy linii, karta z hobby, czasem reakcji i liczbą umiejętności (interakcje kostki i gitary później).
 - **Meta:** trasa to zamknięte okrążenie, brama START na końcu staje się metą „Projects →”. Za metą kamera wznosi się nad planetę, ciemność i lądowanie nisko przy podłodze robota, w pierwszym projekcie.
 - **Z projektów do środka:** „About” w projektach prowadzi przez podłogę pod robotem zamiast przez twarz; „Back” wraca tą samą drogą. „Projects” w menu w trakcie jazdy też wychodzi przez robota.

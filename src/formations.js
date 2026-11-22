@@ -542,6 +542,71 @@ export function rubiksCube(N) {
   ], { scale: 1.25 });
 }
 
+/**
+ * About, stop 1 backdrop: a technical university. A long block with rows of windows
+ * (a few labs still lit, orange), a central tower with a clock, a dome on the roof.
+ */
+export function campusTech(N) {
+  const X = 0.62, B = -0.5, T = 0.04, D = 0.12;
+  const cols = 12, rows = 3;
+  return build(N, [
+    { w: 0.26, fn: () => [...onBox(-X, X, B, T, -D, D), blue(0.4 + R() * 0.2), 0.7] },
+    { w: 0.2, fn: () => {   // windows
+      const c = (R() * cols) | 0, r = (R() * rows) | 0;
+      if (Math.abs(c - (cols - 1) / 2) < 1.2) return [jit(0.2), lerp(B, T, R()), D, blue(0.3), 0];   // the tower is in front here
+      const lit = (c * 5 + r * 3) % 7 === 0;
+      const x = lerp(-X + 0.07, X - 0.07, c / (cols - 1)), y = lerp(B + 0.1, T - 0.08, r / (rows - 1));
+      return [x + jit(0.05), y + jit(0.06), D + 0.003, lit ? hot(0.95) : blue(0.85), lit ? 1 : 0.85];
+    } },
+    { w: 0.16, fn: () => [...onBox(-0.12, 0.12, B, 0.4, -D - 0.02, D + 0.02), blue(0.55 + R() * 0.2), 0.8] },   // tower
+    { w: 0.07, fn: () => {   // its roof: a pyramid
+      const t = R(), half = 0.13 * (1 - t), u = (R() * 2 - 1) * half, side = (R() * 4) | 0;
+      const p = side === 0 ? [u, half] : side === 1 ? [u, -half] : side === 2 ? [half, u] : [-half, u];
+      return [p[0], 0.4 + t * 0.16, p[1], blue(0.7), 0.85];
+    } },
+    { w: 0.07, fn: () => { const a = R() * TAU, r = 0.05 + jit(0.008); return [Math.cos(a) * r, 0.27 + Math.sin(a) * r, D + 0.025, hot(1.0), 1]; } },   // clock
+    { w: 0.02, fn: () => { const hand = R() < 0.5; const t = R(); return [hand ? t * 0.03 : 0, 0.27 + (hand ? 0 : t * 0.04), D + 0.026, [1, 0.95, 0.9], 1]; } },
+    { w: 0.06, fn: () => { const p = onSphere(0.42, T, 0, 0.1); return [p[0], Math.max(T, p[1]), p[2], blue(0.75), 0.85]; } },   // the dome
+    { w: 0.06, fn: () => { const k = (R() * 3) | 0; return [lerp(-0.2, 0.2, R()) * (1 - k * 0.15), B + 0.025 * k, D + 0.05 - k * 0.025, blue(0.55), 0.75]; } },   // steps
+    { w: 0.1, fn: () => {   // the ground: a path to the door
+      const x = Math.round(lerp(-7, 7, R())) / 10, z = lerp(D + 0.06, 0.45, R());
+      return R() < 0.5 ? [x, B, z, blue(0.3), 0.35] : [lerp(-0.08, 0.08, R()), B, z, blue(0.6), 0.55];
+    } },
+  ], { tilt: 0.12, scale: 0.95 });
+}
+
+/**
+ * About, stop 2 backdrop: a university of economics. A classical portico (steps,
+ * six columns, a pediment edged in orange) with a modern glass wing beside it.
+ */
+export function campusEcon(N) {
+  const B = -0.5, colsX = Array.from({ length: 6 }, (_, k) => lerp(-0.3, 0.3, k / 5));
+  return build(N, [
+    { w: 0.1, fn: () => { const k = (R() * 3) | 0; const w = 0.42 - k * 0.03; return [lerp(-w, w, R()), B + k * 0.03 + 0.015, 0.16 - k * 0.035 + jit(0.03), blue(0.55), 0.75]; } },   // steps
+    { w: 0.24, fn: () => { const x = colsX[(R() * 6) | 0]; return [...onCylinder(x, 0.08, 0.026, B + 0.09, 0.1), blue(0.75 + R() * 0.15), 0.9]; } },   // columns
+    { w: 0.08, fn: () => [...onBox(-0.37, 0.37, 0.1, 0.17, 0.02, 0.13), blue(0.6), 0.85] },   // entablature
+    { w: 0.12, fn: () => {   // pediment
+      const t = R(), x = lerp(-0.37, 0.37, R());
+      const top = 0.17 + 0.15 * (1 - Math.abs(x) / 0.37);
+      return t < 0.45 ? [x, top, 0.12, hot(0.95), 1] : [x * (0.3 + 0.7 * R()), lerp(0.17, top, R()), 0.1, blue(0.5), 0.7];
+    } },
+    { w: 0.12, fn: () => [...onBox(-0.34, 0.34, B + 0.09, 0.1, -0.12, -0.04), blue(0.35 + R() * 0.15), 0.6] },   // wall behind
+    { w: 0.22, fn: () => {   // the glass wing
+      const x0 = 0.42, x1 = 0.8, y1 = 0.06;
+      if (R() < 0.45) {   // mullions
+        return R() < 0.5 ? [lerp(x0, x1, Math.round(R() * 6) / 6), lerp(B, y1, R()), 0.1, blue(0.7), 0.8] : [lerp(x0, x1, R()), lerp(B, y1, Math.round(R() * 5) / 5), 0.1, blue(0.7), 0.8];
+      }
+      const p = onBox(x0, x1, B, y1, -0.1, 0.1);
+      const lit = R() < 0.12;
+      return [...p, lit ? hot(0.9) : blue(0.45 + R() * 0.3), lit ? 0.95 : 0.55];
+    } },
+    { w: 0.1, fn: () => {   // the ground
+      const x = Math.round(lerp(-6, 9, R())) / 10, z = lerp(0.2, 0.45, R());
+      return [x, B, z, blue(0.3), 0.35];
+    } },
+  ], { tilt: 0.12, scale: 0.95 });
+}
+
 /* ------------------------------------------------------- signature: pen -- */
 
 /**

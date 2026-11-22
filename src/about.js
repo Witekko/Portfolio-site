@@ -2,7 +2,7 @@
  * About, inside the head: a walk along a line, then things to play with.
  *
  *  - Its own scroll, with the same inertia as the page (Lenis on the About layer).
- *  - chapter(): where the reader is, 0 = hello, 1..4 = the stops on the line, 5 = off hours,
+ *  - chapter(): where the reader is, 0 = hello, 1..5 = the stops on the line, 6 = off hours,
  *    fractional in between. main.js morphs the particles from shape to shape with it.
  *  - The route: an orange line draws itself down the left side as you scroll, and a little
  *    line follower (the cardboard one, in spirit) rides at its tip. Stops it has passed light up.
@@ -33,7 +33,7 @@ export function createAbout({ audio = null } = {}) {
   }
   el.addEventListener('scroll', () => { if (!lenis) draw(); }, { passive: true });
 
-  /** 0 hello … 5 off hours, fractional between chapters (by their centres). */
+  /** 0 hello … 6 off hours, fractional between chapters (by their centres). */
   function chapter() {
     const mid = el.clientHeight / 2;
     const c = chapters.map((ch) => { const r = ch.getBoundingClientRect(); return r.top + r.height / 2; });
@@ -97,7 +97,7 @@ export function createAbout({ audio = null } = {}) {
       }
     });
     tail.style.opacity = len >= total - 0.5 ? '' : '0';
-    if (loading) loading.textContent = String(Math.round(37 * Math.min(1, Math.max(0, (len - stops[3].len + 160) / 160))));
+    if (loading) loading.textContent = String(Math.round(37 * Math.min(1, Math.max(0, (len - stops[stops.length - 1].len + 160) / 160))));
   }
   new ResizeObserver(() => { if (!el.hidden) buildRoute(); }).observe(inner);
 
