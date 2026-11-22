@@ -22,7 +22,9 @@ export const PX_W = 1280, PX_H = 800;   // card HTML size; rendered at 2× so it
 const L1 = 1.85, L2 = 1.7;          // upper arm, forearm
 const SHOULDER_H = 0.5;
 const ROD = 0.42;                   // gripper attach point → wrist
-const BASE = new THREE.Vector3(1.6, -1.95, -0.1);
+export const BASE = new THREE.Vector3(1.6, -1.95, -0.1);
+// The floor everything stands on (magazine, cup, the robot's base plate).
+export const FLOOR_Y = -2.03;
 const SHOULDER = BASE.clone().add(new THREE.Vector3(0, SHOULDER_H, 0));
 
 const SLOT0 = new THREE.Vector3(1.0, -1.39, -0.56);   // centre of the front card in the magazine
@@ -95,9 +97,13 @@ const m = (geo, material) => new THREE.Mesh(geo, material);
 function buildArm(stage) {
   const parts = {};
 
-  const pedestal = m(new THREE.CylinderGeometry(0.36, 0.44, 1.4, 48), mat.dark);
-  pedestal.position.set(BASE.x, BASE.y - 0.7, BASE.z);
-  stage.add(pedestal);
+  // Pedestal down to the floor, on a wide, low base plate.
+  const pedestalH = BASE.y - FLOOR_Y;
+  const pedestal = m(new THREE.CylinderGeometry(0.36, 0.44, pedestalH, 48), mat.dark);
+  pedestal.position.set(BASE.x, BASE.y - pedestalH / 2, BASE.z);
+  const plate = m(new THREE.CylinderGeometry(0.5, 0.52, 0.03, 48), mat.dark);
+  plate.position.set(BASE.x, FLOOR_Y + 0.015, BASE.z);
+  stage.add(pedestal, plate);
 
   parts.turret = new THREE.Group();
   parts.turret.position.copy(BASE);

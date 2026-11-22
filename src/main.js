@@ -8,11 +8,15 @@
  *       (robot.js) hands over each project's video card, driven by scroll
  *   last  the signature again, for contact (the robot signs it)
  *   A  About: a career helix, entered with a camera fly-through
+ * Around it (world.js): dust through the whole page and a soft floor under the robot.
+ * Scrolling is smoothed with inertia (Lenis) for the mouse wheel; touch keeps its own.
  */
 import * as THREE from 'three';
+import Lenis from 'lenis';
 import { CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer.js';
 import * as F from './formations.js';
-import { createRobotStage, SIGN_START } from './robot.js';
+import { createRobotStage, SIGN_START, FLOOR_Y, BASE } from './robot.js';
+import { createDust, createFloor } from './world.js';
 import { createAudio } from './audio.js';
 import { createGate } from './gate.js';
 import { initScramble } from './scramble.js';
@@ -122,6 +126,9 @@ async function init() {
   volFx.value = audio.volume.fx;
   volMusic.addEventListener('input', () => audio.setVolume('music', +volMusic.value));
   volFx.addEventListener('input', () => { audio.setVolume('fx', +volFx.value); audio.tick(); });
+  // Heavier, smoother wheel scrolling. Stopped while the intro runs and while About is open.
+  const lenis = reduceMotion ? null : new Lenis({ lerp: 0.07 });
+  lenis?.stop();
   gate.setProgress(0.18, 'loading portrait…');
 
   const canvas = $('#gl');
@@ -204,6 +211,10 @@ async function init() {
     html: el.dataset.card ? document.getElementById(el.dataset.card).innerHTML : null,
   })), cssScene);
   scene.add(robot.stage);
+  const dust = createDust(isSmall() ? 900 : 2200);
+  scene.add(dust.points);
+  const floor = createFloor({ y: FLOOR_Y, base: BASE, pool: { x: 1.0, z: -3 } });
+  robot.stage.add(floor.points);
 
   /* ---- layout ---- */
   let scale = 1;
@@ -280,6 +291,9 @@ async function init() {
     points.scale.setScalar(scale);
     const pxPerUnit = (h * renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(FOV / 2)));
     uniforms.uSize.value = (scale / 270) * pxPerUnit * 1.6;
+    dust.setPx(pxPerUnit);
+    floor.setPx(pxPerUnit, h * renderer.getPixelRatio());
+    floor.points.visible = !isSmall();   // on phones the robot sits high, the floor would be a thin band across the copy
     measure();
   }
 
@@ -337,6 +351,7 @@ async function init() {
     audio.whoosh(true);
     document.documentElement.classList.add('is-locked');   // no page scroll under the About panel
     aboutTarget = 1;
+    syncScroll();
     setTimeout(() => closeBtn.focus({ preventScroll: true }), reduceMotion ? 0 : 500);
   }
   function closeAbout() {
@@ -346,6 +361,7 @@ async function init() {
     aboutEl.classList.remove('is-open');
     document.body.classList.remove('is-about');
     document.documentElement.classList.remove('is-locked');
+    syncScroll();
     lastFocus?.focus?.({ preventScroll: true });
   }
   document.querySelectorAll('[data-open-about]').forEach((el) => el.addEventListener('click', (e) => { e.preventDefault(); openAbout(); }));
@@ -462,21 +478,38 @@ async function init() {
   addEventListener('wheel', hurry, { passive: true });
   addEventListener('touchmove', hurry, { passive: true });
   addEventListener('keydown', (e) => { if (['PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', ' ', 'End', 'Home'].includes(e.key)) hurry(); });
+  const glideTo = (hash) => {
+    const el = hash.length > 1 && document.querySelector(hash);
+    if (!el) return;
+    if (lenis) lenis.scrollTo(el, { duration: 1.6, easing: easeInOut });
+    else el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' });
+  };
   document.addEventListener('click', (e) => {
     const a = e.target.closest('a[href^="#"]');
-    if (introDone || !a || a.hasAttribute('data-open-about')) return;
-    e.preventDefault();
-    pendingHash = a.getAttribute('href');
-    hurry();
+    if (!a || a.hasAttribute('data-open-about') || a.classList.contains('skip')) return;
+    if (!introDone) { e.preventDefault(); pendingHash = a.getAttribute('href'); hurry(); return; }
+    if (lenis && e.detail > 0) { e.preventDefault(); glideTo(a.getAttribute('href')); history.replaceState(null, '', a.getAttribute('href')); }
   }, true);
+  // Keyboard scrolling stays native; if a wheel glide is still running, end it where it is
+  // so the key press isn't overridden by the glide.
+  addEventListener('keydown', (e) => {
+    if (lenis?.isScrolling === 'smooth' && ['PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', ' ', 'End', 'Home'].includes(e.key)) lenis.scrollTo(lenis.scroll, { immediate: true });
+  }, true);
+  function syncScroll() {
+    if (!lenis) return;
+    if (introDone && aboutTarget === 0) lenis.start(); else lenis.stop();
+  }
   function endIntro() {
     introDone = true;
     document.documentElement.classList.remove('is-intro');
-    if (pendingHash) { document.querySelector(pendingHash)?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' }); pendingHash = null; }
+    syncScroll();
+    if (pendingHash) { glideTo(pendingHash); pendingHash = null; }
   }
 
+  let warmShown = -1, coolShown = -1;
   function frame() {
     const now = performance.now() / 1000;
+    lenis?.raf(now * 1000);
     const dt = Math.min(0.05, now - last); last = now;
     const t = freezeT ?? now - start;
     const still = reduceMotion && freezeT === null;
@@ -590,7 +623,7 @@ async function init() {
     if (robot.stage.visible && lastMotion) {
       const step = Math.hypot(mo.x - lastMotion.x, mo.y - lastMotion.y, mo.z - lastMotion.z) / Math.max(dt, 1e-3);
       servo = clamp01(step / 2.2 + Math.abs(mo.yaw - lastMotion.yaw) / Math.max(dt, 1e-3) / 3);
-      if ((mo.grip > 0.5) !== (lastMotion.grip > 0.5)) audio.click();
+      if ((mo.grip > 0.5) !== (lastMotion.grip > 0.5)) { audio.click(); floor.ripple(mo.x, mo.z, t); }
     }
     lastMotion = mo;
     let scratch = entered && write > 0 && write < 1 ? 0.55 : 0;   // the intro signature
@@ -626,6 +659,25 @@ async function init() {
     camera.fov = FOV + 14 * bump;
     camera.updateProjectionMatrix();
 
+    // World: going down to the robot's level lifts the dust as fast as the robot's cell rises.
+    const descent = easeInOut(smoothstep(-0.95, -0.45, pDisp));
+    ray.setFromCamera(ndc, camera);
+    dust.update({
+      t, warm: smoothstep(-0.6, 0.2, pDisp) * (1 - contactAmt) * (1 - a),
+      lift: descent * base.stageDrop * robot.stage.scale.y + Math.max(0, pDisp) * 0.25,
+      alpha: (1 - 0.7 * ie) * (1 - 0.35 * contactAmt),
+      ray: pointerSeen && !isTouch ? ray.ray : null,
+    });
+    if (robot.stage.visible) floor.update({ t, gripper: mo });
+    // Light: cool in the hero, a warm glow on the floor in the robot's hall, darker at the signature.
+    const warm = Math.round(descent * (1 - contactAmt * 0.6) * (1 - a) * 100) / 100;
+    const cool = Math.round((1 - 0.25 * descent - 0.3 * contactAmt) * 100) / 100;
+    if (warm !== warmShown || cool !== coolShown) {
+      warmShown = warm; coolShown = cool;
+      document.body.style.setProperty('--warm', warm);
+      document.body.style.setProperty('--cool', cool);
+    }
+
     // UI: active scene, rail, hint.
     const idx = Math.round(s);
     if (idx !== activeScene) {
@@ -657,7 +709,7 @@ async function init() {
     gate.leave(reduceMotion);
   });
   if (new URLSearchParams(location.search).has("about")) openAbout();   // debug: ?about=1
-  if (params.has('debug') || params.has('audiotest')) window.__debug = { THREE, robot, camera, audio };   // for automated checks
+  if (params.has('debug') || params.has('audiotest')) window.__debug = { THREE, robot, camera, audio, lenis };   // for automated checks
 }
 
 /** Without WebGL there are no cards to click: show each project's details right under it. */

@@ -17,10 +17,13 @@ html { color-scheme: dark; scroll-behavior: smooth; }
 html, body { overflow-x: clip; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
+/* Light follows the story (main.js sets --warm and --cool): cool blue around the head,
+   a warm glow on the robot's floor, darker under the signature. */
 body {
   margin: 0;
   background:
-    radial-gradient(60vmax 60vmax at 74% 45%, rgba(40, 100, 255, .12), transparent 60%),
+    radial-gradient(48vmax 24vmax at 70% 100%, rgba(255, 138, 61, calc(.075 * var(--warm, 0))), transparent 70%),
+    radial-gradient(60vmax 60vmax at 74% 45%, rgba(40, 100, 255, calc(.12 * var(--cool, 1))), transparent 60%),
     var(--bg);
   background-attachment: fixed;
   color: var(--ink);
@@ -31,6 +34,11 @@ body {
 html.is-locked { overflow: hidden; }
 /* First screen stays put while the signature is written and the head is built. */
 html.is-intro { overflow: hidden; }
+/* Lenis (smooth wheel scrolling) */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-stopped { overflow: clip; }
+.lenis [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-smooth iframe { pointer-events: none; }
 main, .rail { transition: opacity .5s ease; }
 body.is-about main, body.is-about .rail, body.is-about #css3d { opacity: 0; pointer-events: none; }
 body.is-inspect main, body.is-inspect .rail { opacity: 0; pointer-events: none; }
