@@ -178,9 +178,16 @@ export const FACE_HIT = { cx: 0, cy: 0.11, rx: 0.34, ry: 0.45 };   // head ellip
 
 /* ------------------------------------------------------------- signature -- */
 
-/** Points along the pen strokes; rank = how far along the writing they are. */
-export function signature(N) {
-  // Hershey units → unit space; y grows downwards in the font.
+/**
+ * The signature as smooth strokes, shared by the particle ink and the robot's pen
+ * so the two always line up:
+ *  - normalised (0.95 units wide, centred, y up),
+ *  - strokes that touch are joined, so the pen keeps going like real cursive,
+ *  - corners rounded with a Catmull-Rom pass.
+ */
+let strokesCache = null;
+function signatureStrokes() {
+  if (strokesCache) return strokesCache;
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const s of SIGNATURE_STROKES) for (let k = 0; k < s.length; k += 2) {
     minX = Math.min(minX, s[k]); maxX = Math.max(maxX, s[k]);
@@ -188,35 +195,81 @@ export function signature(N) {
   }
   const scale = 0.95 / (maxX - minX);
   const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-  const segs = [];
-  let total = 0;
-  for (const s of SIGNATURE_STROKES) {
-    for (let k = 0; k + 3 < s.length; k += 2) {
-      const a = [(s[k] - cx) * scale, -(s[k + 1] - cy) * scale];
-      const b = [(s[k + 2] - cx) * scale, -(s[k + 3] - cy) * scale];
-      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      segs.push({ a, b, start: total, len });
-      total += len;
-    }
+  const raw = SIGNATURE_STROKES.map((s) => {
+    const pts = [];
+    for (let k = 0; k < s.length; k += 2) pts.push([(s[k] - cx) * scale, -(s[k + 1] - cy) * scale]);
+    return pts;
+  });
+
+  // Join strokes that (almost) touch.
+  const JOIN = 0.025;
+  const joined = [];
+  for (const pts of raw) {
+    const prev = joined.at(-1);
+    if (prev && Math.hypot(pts[0][0] - prev.at(-1)[0], pts[0][1] - prev.at(-1)[1]) < JOIN) prev.push(...pts.slice(1));
+    else joined.push(pts.slice());
   }
+
+  // Round the corners: Catmull-Rom through the points.
+  const SUB = 5;
+  const smooth = (p) => {
+    if (p.length < 3) {
+      const out = [];
+      for (let i = 0; i < p.length - 1; i++) for (let s = 0; s < SUB; s++) out.push([lerp(p[i][0], p[i + 1][0], s / SUB), lerp(p[i][1], p[i + 1][1], s / SUB)]);
+      out.push(p.at(-1));
+      return out;
+    }
+    const out = [];
+    for (let i = 0; i < p.length - 1; i++) {
+      const p0 = p[Math.max(0, i - 1)], p1 = p[i], p2 = p[i + 1], p3 = p[Math.min(p.length - 1, i + 2)];
+      for (let s = 0; s < SUB; s++) {
+        const t = s / SUB, t2 = t * t, t3 = t2 * t;
+        out.push([0, 1].map((d) => 0.5 * ((2 * p1[d]) + (-p0[d] + p2[d]) * t + (2 * p0[d] - 5 * p1[d] + 4 * p2[d] - p3[d]) * t2 + (-p0[d] + 3 * p1[d] - 3 * p2[d] + p3[d]) * t3)));
+      }
+    }
+    out.push(p.at(-1));
+    return out;
+  };
+
+  const strokes = joined.map((p) => {
+    const pts = smooth(p);
+    const cum = [0];
+    for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]));
+    return { pts, cum, len: cum.at(-1) };
+  });
+  strokesCache = { strokes, total: strokes.reduce((s, st) => s + st.len, 0) };
+  return strokesCache;
+}
+
+/** Point and unit tangent at arc length s along a stroke. */
+function alongStroke(st, s) {
+  s = Math.min(Math.max(s, 0), st.len);
+  let k = 1;
+  while (k < st.cum.length - 1 && st.cum[k] < s) k++;
+  const a = st.pts[k - 1], b = st.pts[k];
+  const seg = st.cum[k] - st.cum[k - 1] || 1e-6;
+  const g = (s - st.cum[k - 1]) / seg;
+  const dx = b[0] - a[0], dy = b[1] - a[1], dl = Math.hypot(dx, dy) || 1;
+  return { x: lerp(a[0], b[0], g), y: lerp(a[1], b[1], g), tx: dx / dl, ty: dy / dl };
+}
+
+/** Points along the pen strokes; rank = how far along the writing they are. */
+export function signature(N) {
+  const { strokes, total } = signatureStrokes();
+  const starts = [];
+  let acc = 0;
+  for (const st of strokes) { starts.push(acc); acc += st.len; }
   let si = 0;
   return build(N, [{
     w: 1,
     fn: (k) => {
       const at = ((k + R()) / N) * total;
-      while (si < segs.length - 1 && segs[si].start + segs[si].len < at) si++;
-      while (si > 0 && segs[si].start > at) si--;
-      const s = segs[si];
-      const t = s.len ? (at - s.start) / s.len : 0;
-      const nx = -(s.b[1] - s.a[1]), ny = s.b[0] - s.a[0];
-      const nl = Math.hypot(nx, ny) || 1;
-      const w = (R() - 0.5) * 0.012;                       // ink thickness
+      while (si < strokes.length - 1 && starts[si] + strokes[si].len < at) si++;
+      while (si > 0 && starts[si] > at) si--;
+      const p = alongStroke(strokes[si], at - starts[si]);
+      const w = (R() - 0.5) * 0.012;                       // ink thickness, across the stroke
       const shade = 0.8 + R() * 0.25;
-      return [
-        lerp(s.a[0], s.b[0], t) + (nx / nl) * w,
-        lerp(s.a[1], s.b[1], t) + (ny / nl) * w,
-        jit(0.01), hot(shade), 0.55, at / total,
-      ];
+      return [p.x - p.ty * w, p.y + p.tx * w, jit(0.01), hot(shade), 0.55, at / total];
     },
   }]);
 }
@@ -373,73 +426,93 @@ export function careerHelix(N) {
 /* ------------------------------------------------------- signature: pen -- */
 
 /**
- * The pen's path through the same strokes the particle signature uses (same
- * normalisation, same ink order), with pen-up travel between strokes.
+ * The pen's path through the same strokes as the particle ink, timed like a hand:
+ * a steady speed along the strokes, smooth lifted arcs between them (leaving along
+ * one stroke's direction, arriving along the next one's), a gentle start and finish.
  * at(seconds) → { x, y, lift (0 on the surface … 1 lifted), ink (0..1 written) }.
  * `ink` matches the particles' writing rank, so ink appears right under the pen.
  */
 export function signaturePenPlan({ duration = 5 } = {}) {
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (const s of SIGNATURE_STROKES) for (let k = 0; k < s.length; k += 2) {
-    minX = Math.min(minX, s[k]); maxX = Math.max(maxX, s[k]);
-    minY = Math.min(minY, s[k + 1]); maxY = Math.max(maxY, s[k + 1]);
-  }
-  const scale = 0.95 / (maxX - minX);
-  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-  const strokes = SIGNATURE_STROKES.map((s) => {
-    const pts = [];
-    for (let k = 0; k < s.length; k += 2) pts.push([(s[k] - cx) * scale, -(s[k + 1] - cy) * scale]);
-    const cum = [0];
-    for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]));
-    return { pts, cum, len: cum[cum.length - 1] };
+  const { strokes, total } = signatureStrokes();
+  const hops = strokes.slice(1).map((st, i) => {
+    const A = alongStroke(strokes[i], strokes[i].len), B = alongStroke(st, 0);
+    return { A, B, dist: Math.hypot(B.x - A.x, B.y - A.y) };
   });
-  const total = strokes.reduce((s, st) => s + st.len, 0);
-  const travelTotal = strokes.slice(1).reduce((s, st, i) => {
-    const a = strokes[i].pts.at(-1), b = st.pts[0];
-    return s + Math.hypot(b[0] - a[0], b[1] - a[1]);
-  }, 0);
-  const LIFT_T = 0.12;
-  // Split the time: drawing gets most of it, pen-up hops are quicker.
-  const hopTime = LIFT_T * 2 * (strokes.length - 1);
-  const drawSpeed = (total + travelTotal / 3) / Math.max(0.5, duration - hopTime);
-  const travelSpeed = drawSpeed * 3;
+  // Pen speed v so the whole signature takes about `duration`; hops are a bit faster, never instant.
+  const HOP_MIN = 0.16, HOP_K = 1.7;
+  const hopTime = (h, v) => Math.max(HOP_MIN, h.dist / (HOP_K * v));
+  let v = (total + hops.reduce((s, h) => s + h.dist / HOP_K, 0)) / duration;
+  for (let it = 0; it < 5; it++) v = total / Math.max(0.5, duration - hops.reduce((s, h) => s + hopTime(h, v), 0));
+
+  // Like a hand, the pen slows down in tight turns: each segment's time is its length
+  // divided by a speed factor that drops with the turn angle (smoothed over neighbours).
+  const timing = strokes.map((st) => {
+    const n = st.pts.length, turn = new Float32Array(n);
+    for (let k = 1; k < n - 1; k++) {
+      const a = st.pts[k - 1], b = st.pts[k], c = st.pts[k + 1];
+      const a1 = Math.atan2(b[1] - a[1], b[0] - a[0]), a2 = Math.atan2(c[1] - b[1], c[0] - b[0]);
+      turn[k] = Math.abs(Math.atan2(Math.sin(a2 - a1), Math.cos(a2 - a1)));
+    }
+    const slow = Array.from(turn, (_, k) => {
+      let s = 0, c = 0;
+      for (let j = Math.max(0, k - 2); j <= Math.min(n - 1, k + 2); j++) { s += turn[j]; c++; }
+      return 1 / (1 + 2.5 * (s / c));
+    });
+    const cumT = [0];   // "length-equivalent" time along the stroke
+    for (let k = 1; k < n; k++) cumT.push(cumT[k - 1] + (st.cum[k] - st.cum[k - 1]) / ((slow[k - 1] + slow[k]) / 2));
+    return { cumT, s0: slow[0], s1: slow[n - 1] };
+  });
+  const totalT = timing.reduce((s, c) => s + c.cumT.at(-1), 0);
+  v *= totalT / total;   // keep the overall duration with the slower turns
 
   const moves = [];
   let t = 0, ink = 0;
   strokes.forEach((st, i) => {
     if (i > 0) {
-      const a = strokes[i - 1].pts.at(-1), b = st.pts[0];
-      const dur = LIFT_T * 2 + Math.hypot(b[0] - a[0], b[1] - a[1]) / travelSpeed;
-      moves.push({ hop: true, a, b, t0: t, dur, ink });
+      const h = hops[i - 1], dur = hopTime(h, v * total / totalT);
+      // leave and arrive at the real pen speed at those stroke ends
+      moves.push({ hop: true, ...h, t0: t, dur, ink, L0: v * timing[i - 1].s1 * dur, L1: v * timing[i].s0 * dur });
       t += dur;
     }
-    const dur = st.len / drawSpeed;
-    moves.push({ hop: false, st, t0: t, dur, ink });
-    t += dur;
-    ink += st.len;
+    const cumT = timing[i].cumT, dur = cumT.at(-1) / v;
+    moves.push({ hop: false, st, cumT, t0: t, dur, ink });
+    t += dur; ink += st.len;
   });
-  const first = strokes[0].pts[0], last = strokes.at(-1).pts.at(-1);
+
+  // Get up to speed at the start and slow down at the end (continuous velocity throughout).
+  const T = t, RAMP = 0.3, Tw = T + RAMP;
+  const warp = (x) => x <= 0 ? 0 : x >= Tw ? T : x < RAMP ? (x * x) / (2 * RAMP)
+    : x > Tw - RAMP ? T - (Tw - x) ** 2 / (2 * RAMP) : x - RAMP / 2;
+  const DOWN = 0.18;   // touching down / lifting off
 
   function at(time) {
-    if (time <= 0) return { x: first[0], y: first[1], lift: 1, ink: 0 };
-    if (time >= t) return { x: last[0], y: last[1], lift: clamp01((time - t) / LIFT_T), ink: 1 };
+    const tt = warp(time);
     let m = moves[0];
-    for (const mv of moves) { if (time >= mv.t0) m = mv; else break; }
-    const f = clamp01((time - m.t0) / m.dur);
+    for (const mv of moves) { if (tt >= mv.t0) m = mv; else break; }
+    const u = clamp01((tt - m.t0) / m.dur);
+    let out;
     if (m.hop) {
-      const lt = (time - m.t0);
-      const lift = Math.min(1, lt / LIFT_T, (m.dur - lt) / LIFT_T);
-      const e = f * f * (3 - 2 * f);
-      return { x: lerp(m.a[0], m.b[0], e), y: lerp(m.a[1], m.b[1], e), lift, ink: m.ink / total };
+      // Cubic Hermite arc; tangents scaled so the speed carries over from the strokes.
+      const u2 = u * u, u3 = u2 * u;
+      const h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = -2 * u3 + 3 * u2, h11 = u3 - u2;
+      out = {
+        x: h00 * m.A.x + h10 * m.A.tx * m.L0 + h01 * m.B.x + h11 * m.B.tx * m.L1,
+        y: h00 * m.A.y + h10 * m.A.ty * m.L0 + h01 * m.B.y + h11 * m.B.ty * m.L1,
+        lift: Math.sin(Math.PI * u) ** 2,
+        ink: m.ink / total,
+      };
+    } else {
+      // time → arc length, through the slow-in-turns timing
+      const tau = u * m.cumT.at(-1);
+      let k = 1;
+      while (k < m.cumT.length - 1 && m.cumT[k] < tau) k++;
+      const g = (tau - m.cumT[k - 1]) / (m.cumT[k] - m.cumT[k - 1] || 1e-6);
+      const s = m.st.cum[k - 1] + g * (m.st.cum[k] - m.st.cum[k - 1]), p = alongStroke(m.st, s);
+      out = { x: p.x, y: p.y, lift: 0, ink: (m.ink + s) / total };
     }
-    // Drawing a stroke: first moments lower the pen, then follow the curve by arc length.
-    const s = f * m.st.len;
-    let k = 1;
-    while (k < m.st.cum.length - 1 && m.st.cum[k] < s) k++;
-    const seg = m.st.cum[k] - m.st.cum[k - 1] || 1;
-    const g = (s - m.st.cum[k - 1]) / seg;
-    const p0 = m.st.pts[k - 1], p1 = m.st.pts[k];
-    return { x: lerp(p0[0], p1[0], g), y: lerp(p0[1], p1[1], g), lift: 0, ink: (m.ink + s) / total };
+    out.lift = Math.max(out.lift, 1 - smoothstep(0, DOWN, time), smoothstep(Tw, Tw + DOWN, time));
+    return out;
   }
-  return { at, duration: t, start: { x: first[0], y: first[1] } };
+  const first = strokes[0].pts[0];
+  return { at, duration: Tw + DOWN, start: { x: first[0], y: first[1] } };
 }

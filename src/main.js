@@ -78,8 +78,9 @@ const vertexShader = /* glsl */`
     // Writing: ink appears behind a glowing pen tip.
     float written = smoothstep(aData.w - 0.002, aData.w, uWrite);
     float writtenTo = smoothstep(aData.w - 0.002, aData.w, uWriteTo);
-    float pen = exp(-pow((uWrite - aData.w) * 70.0, 2.0)) * step(uWrite, 0.999) * (1.0 - e)
-              + exp(-pow((uWriteTo - aData.w) * 70.0, 2.0)) * step(uWriteTo, 0.999) * step(0.001, uWriteTo) * e;
+    // The glow trails the pen: only ink that is already written lights up, never ahead of it.
+    float pen = exp(-pow((uWrite - aData.w) * 90.0, 2.0)) * step(aData.w, uWrite) * step(uWrite, 0.999) * (1.0 - e)
+              + exp(-pow((uWriteTo - aData.w) * 90.0, 2.0)) * step(aData.w, uWriteTo) * step(uWriteTo, 0.999) * step(0.001, uWriteTo) * e;
 
     vColor = mix(aColFrom, aColTo, smoothstep(0.1, 0.9, e)) + pen * vec3(0.5, 0.35, 0.2);
     vAlpha = (mix(aFrom.w * written, aTo.w * writtenTo, e) + pen * 0.5) * uAlphaMul;
@@ -270,6 +271,9 @@ async function init() {
   }
   layout();
   addEventListener('resize', layout);
+  // The viewport can change width without a resize event (scrollbar appearing/disappearing).
+  let lastW = viewW(), lastH = viewH();
+  new ResizeObserver(() => { if (viewW() !== lastW || viewH() !== lastH) { lastW = viewW(); lastH = viewH(); layout(); } }).observe(document.documentElement);
   document.fonts?.ready.then(layout);   // copy sizes change once the web fonts arrive
 
   /* ---- pointer ---- */
@@ -416,6 +420,30 @@ async function init() {
   const start = performance.now() / 1000;
   let last = start, fDisp = 0, pDisp = -1, rotX = 0, rotY = 0, activeScene = -1, hintMode = '';
 
+  /* ---- Intro cooldown: the page stays on the first screen until the head is built ----
+     Trying to scroll (or clicking an in-page link) speeds the intro up instead; a link
+     is followed as soon as the intro ends. */
+  const INTRO_END = T_DELAY + T_WRITE + T_HOLD + T_MORPH;
+  let introClock = 0, introSpeed = 1, introDone = reduceMotion, pendingHash = null;
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  if (!introDone) { scrollTo(0, 0); document.documentElement.classList.add('is-intro'); }
+  const hurry = () => { if (!introDone) introSpeed = 4; };
+  addEventListener('wheel', hurry, { passive: true });
+  addEventListener('touchmove', hurry, { passive: true });
+  addEventListener('keydown', (e) => { if (['PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', ' ', 'End', 'Home'].includes(e.key)) hurry(); });
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a[href^="#"]');
+    if (introDone || !a || a.hasAttribute('data-open-about')) return;
+    e.preventDefault();
+    pendingHash = a.getAttribute('href');
+    hurry();
+  }, true);
+  function endIntro() {
+    introDone = true;
+    document.documentElement.classList.remove('is-intro');
+    if (pendingHash) { document.querySelector(pendingHash)?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' }); pendingHash = null; }
+  }
+
   function frame() {
     const now = performance.now() / 1000;
     const dt = Math.min(0.05, now - last); last = now;
@@ -423,8 +451,11 @@ async function init() {
     const still = reduceMotion && freezeT === null;
 
     // Intro: write the signature, then morph it into the head.
-    const write = still ? 1 : easeInOutSine(clamp01((t - T_DELAY) / T_WRITE));
-    const intro = still ? 1 : easeInOut(clamp01((t - T_DELAY - T_WRITE - T_HOLD) / T_MORPH));
+    if (!introDone) introClock += dt * introSpeed;
+    const it = freezeT ?? introClock;   // intro time (debug ?t= freezes it)
+    const write = still ? 1 : easeInOutSine(clamp01((it - T_DELAY) / T_WRITE));
+    const intro = still ? 1 : easeInOut(clamp01((it - T_DELAY - T_WRITE - T_HOLD) / T_MORPH));
+    if (!introDone && (intro >= 1 || it >= INTRO_END)) endIntro();
 
     // Scroll: one scene per screen; formations hold, then morph between scenes.
     const s = forceScene ?? storyPosition(scrollY);

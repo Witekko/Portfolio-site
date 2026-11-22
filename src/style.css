@@ -29,6 +29,10 @@ body {
 }
 /* Scroll lock lives on <html>: with overflow-x: clip there, body overflow no longer locks the page. */
 html.is-locked { overflow: hidden; }
+/* First screen stays put while the signature is written and the head is built. */
+html.is-intro { overflow: hidden; }
+/* Reserve the scrollbar's space, so locking scroll never shifts the layout. */
+html { scrollbar-gutter: stable; }
 main, .rail { transition: opacity .5s ease; }
 body.is-about main, body.is-about .rail, body.is-about #css3d { opacity: 0; pointer-events: none; }
 body.is-inspect main, body.is-inspect .rail { opacity: 0; pointer-events: none; }
