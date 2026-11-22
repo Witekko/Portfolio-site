@@ -68,7 +68,7 @@ Mały panel „tune me”: gęstość cząsteczek, kolor akcentu, prędkość ro
 
 ## „O mnie”: wnętrze głowy
 
-Sieć neuronowa okazała się zbyt statyczna (zostaje na gałęzi ). Nowy kierunek, zarys zrobiony:
+Sieć neuronowa okazała się zbyt statyczna (zostaje na gałęzi `feature/about-network`). Nowy kierunek, zarys zrobiony:
 
 - **Wejście:** kliknięcie w twarz, kamera wlatuje do głowy, „O mnie” ma własne przewijanie z bezwładnością.
 - **Ścieżka:** pomarańczowa linia rysuje się przy przewijaniu, a po niej jedzie mały line follower. Cztery przystanki, przy każdym cząsteczki układają się w symbol:
