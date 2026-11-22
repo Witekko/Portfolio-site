@@ -18,72 +18,85 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import * as F from './formations.js';
 
-const RP = 5;                 // planet radius
+const RP = 4.2;               // planet radius: one lap is about 28 units
 const K = RP / 6;             // positions below are written for a radius-6 planet and scaled by this
 const LIFT = 0.012;           // the line sits just above the surface
-const VMAX = 3.8, FRICTION = 1.5, ACCEL = 5.5, BOOST = 2.4;
+// Driving: the wheel / a swipe / held keys set a throttle; the speed follows it smoothly,
+// so no single input (or a touchpad's momentum tail) can make the car jump.
+const VMAX = 4.2;             // top speed forward (backward is slower)
+const THROTTLE_PER_PX = 0.004, THROTTLE_MAX_EVENT = 120;   // one mouse-wheel notch (100 px) ≈ 0.4 throttle
+const THROTTLE_FADE = 1.6;    // throttle eases off by itself (per second) when you stop scrolling
+const SPEED_UP = 0.28, SLOW_DOWN = 0.5;   // seconds: how fast the speed follows the throttle
+const BOOST = 2.4;            // boost pads (hidden for now, see SHOW)
+// Extras that are built but switched off for now; they come back where the lap feels empty.
+const SHOW = { arches: false, memories: false, pads: false };
 
 // Where things are along the line (world units from the start, before scaling by K).
 // Stops stand to the right of the line, in the same order as the .station items in index.html.
 // 03 is two stops: the job by day (right), IKE Tracker in the evenings (left), side by side
-// because both count.
+// because both count. Machine learning comes last and the finish follows right after it.
 const STOPS = [
-  { s: 7, side: 2.3, make: F.robotArm },
-  { s: 13.6, side: 2.5, make: F.thesisNetwork },
-  { s: 19.8, side: 2.6, make: F.railWagon },
-  { s: 26.0, side: -2.1, make: F.ikeChart },
-  { s: 31.6, side: 2.4, make: F.neuralLoading },
+  { s: 8.0, side: 2.3, make: F.robotArm },
+  { s: 15.4, side: 2.5, make: F.thesisNetwork },
+  { s: 22.4, side: 2.6, make: F.railWagon },
+  { s: 29.4, side: -2.1, make: F.ikeChart },
+  { s: 35.6, side: 2.4, make: F.neuralLoading },
 ];
 // The universities stand across the line from the first two stops.
 const CAMPUS = [
-  { s: 7.7, side: -2.6, make: F.campusTech },
-  { s: 16.2, side: -2.3, make: F.campusEcon },
+  { s: 8.8, side: -2.6, make: F.campusTech },
+  { s: 18.0, side: -2.3, make: F.campusEcon },
 ];
-const PIT = { s: 36.4, side: 2.2, make: F.rubiksCube };   // off hours: the cube by the line
-const ML_FROM = 27.6, ML_TO = 34.0;   // the dashed stretch: still being built (scaled where used)
+// Off hours: the hobbies float high above the line like thoughts, each with a quiet caption.
+// Over the line they are always in view ahead (the line bends, the side of it does not stay
+// on screen); you drive under them. They sit in the gaps before the next gantry.
+const HOBBIES = [
+  { s: 4.6, side: 0, lift: 1.9, scale: 1.1, make: F.f1Car, label: 'Formula 1 · lights out at the start', f1: true },
+  { s: 11.0, side: 0, lift: 1.9, scale: 1.0, make: F.gamepad, label: 'Games · why I started making them' },
+  { s: 18.2, side: 0, lift: 1.9, scale: 0.9, make: F.rubiksCube, label: 'Speedcubing · 11.84 s single' },
+  { s: 25.4, side: 0, lift: 1.9, scale: 1.0, make: F.guitar, label: 'Guitar · the other evening project' },
+].map((h) => ({ ...h, s: h.s * K }));
+const ML_FROM = 31.0, ML_TO = 38.4;   // the dashed stretch: still being built (scaled where used)
 const GATE_AT = 1.6 * K;      // a gantry with the stop's name stands this far before it; you drive under it
 const START_GATE = 0.9 * K;   // the line is a closed lap: start and finish are the same gantry
 // Skills on the line, grouped by the stop they belong to. `info` is what the inventory shows on hover.
 const W1 = '01 · robotics', W2 = '02 · thesis', W3 = '03 · by day · rail data', WP = '03 · evenings · IKE Tracker';
 const TOKENS = [
   ['C++', 'C++', 2.6, W1, 'My B.Eng. game: Qt bent into a game engine, played with a gyroscope.'],
-  ['C#', 'C#', 3.6, W1, 'Learned from zero in Unity for my remake of Age of War.'],
-  ['Arduino & STM32', 'STM', 4.6, W1, 'Microcontrollers for sensors and motors, like the line follower that started all this.'],
-  ['ABB & FANUC robots', 'ABB', 5.6, W1, 'Programming industrial robot arms in the Automation & Robotics labs.'],
-  ['Statistics', 'STAT', 9.2, W2, 'Spearman rank correlations with Benjamini–Hochberg correction, in my master’s thesis.'],
-  ['Survey research', 'SURV', 10.1, W2, 'A survey of 50 viewers of G2 content, tied to seven composite indices.'],
-  ['Python', 'PY', 11.0, W2, 'My main language for data: analysis, scripts and the IKE Tracker backend.'],
-  ['Pandas', 'PD', 11.9, W2, 'Cleaning and joining data, from survey answers to broker exports.'],
-  ['SQL', 'SQL', 15.4, W3, 'Getting production and work-order data out of the systems it lives in.'],
-  ['Power BI (DAX)', 'DAX', 16.3, W3, 'Dashboards and DAX measures that turn that data into something people read.'],
-  ['Power Platform', 'PP', 17.2, W3, 'Apps and flows that automate business processes at work.'],
-  ['ERP & MES', 'ERP', 18.1, W3, 'Integrating, maintaining and improving the tools around production.'],
-  ['Django', 'DJ', 21.2, WP, 'The full-stack framework behind IKE Tracker, my investment app.'],
-  ['NumPy', 'NP', 21.9, WP, 'The number crunching under returns and allocations.'],
-  ['JavaScript', 'JS', 22.6, WP, 'Front ends: the IKE Tracker dashboard and this site in Three.js.'],
-  ['Chart.js', 'CHT', 23.3, WP, 'TWR/MWR performance and asset-allocation charts.'],
-  ['Git & GitHub', 'GIT', 24.0, WP, 'Version control for every project; this site deploys from GitHub.'],
-  ['Docker', 'DKR', 24.7, WP, 'Containers to run and ship the apps.'],
-  ['next level', '?', 29.0, '', '', true], ['next level', '?', 29.8, '', '', true], ['next level', '?', 32.6, '', '', true],
+  ['C#', 'C#', 3.7, W1, 'Learned from zero in Unity for my remake of Age of War.'],
+  ['Arduino & STM32', 'STM', 4.8, W1, 'Microcontrollers for sensors and motors, like the line follower that started all this.'],
+  ['ABB & FANUC robots', 'ABB', 5.9, W1, 'Programming industrial robot arms in the Automation & Robotics labs.'],
+  ['Statistics', 'STAT', 10.3, W2, 'Spearman rank correlations with Benjamini–Hochberg correction, in my master\u2019s thesis.'],
+  ['Survey research', 'SURV', 11.3, W2, 'A survey of 50 viewers of G2 content, tied to seven composite indices.'],
+  ['Python', 'PY', 12.3, W2, 'My main language for data: analysis, scripts and the IKE Tracker backend.'],
+  ['Pandas', 'PD', 13.3, W2, 'Cleaning and joining data, from survey answers to broker exports.'],
+  ['SQL', 'SQL', 17.3, W3, 'Getting production and work-order data out of the systems it lives in.'],
+  ['Power BI (DAX)', 'DAX', 18.3, W3, 'Dashboards and DAX measures that turn that data into something people read.'],
+  ['Power Platform', 'PP', 19.3, W3, 'Apps and flows that automate business processes at work.'],
+  ['ERP & MES', 'ERP', 20.3, W3, 'Integrating, maintaining and improving the tools around production.'],
+  ['Django', 'DJ', 23.8, WP, 'The full-stack framework behind IKE Tracker, my investment app.'],
+  ['NumPy', 'NP', 24.6, WP, 'The number crunching under returns and allocations.'],
+  ['JavaScript', 'JS', 25.4, WP, 'Front ends: the IKE Tracker dashboard and this site in Three.js.'],
+  ['Chart.js', 'CHT', 26.2, WP, 'TWR/MWR performance and asset-allocation charts.'],
+  ['Git & GitHub', 'GIT', 27.0, WP, 'Version control for every project; this site deploys from GitHub.'],
+  ['Docker', 'DKR', 27.8, WP, 'Containers to run and ship the apps.'],
+  ['next level', '?', 32.4, '', '', true], ['next level', '?', 33.3, '', '', true], ['next level', '?', 37.0, '', '', true],
 ].map(([name, short, s, where, info, locked = false]) => ({ name, short, s: s * K, where, info, locked }));
-// Memories on the left: the projects, as particle shapes next to the skills they were built with.
+// Hidden for now (SHOW.memories): the projects as particle shapes next to the skills they were built with.
 const MEMORIES = [
   { s: 1.9, side: -1.55, make: F.lineFollower, label: 'Line Follower · the cardboard original' },
   { s: 3.4, side: -1.6, make: F.ticTacToe, label: 'Tic-Tac-Toe · my first algorithm' },
   { s: 4.9, side: -1.6, make: F.gyroscope, label: 'Dance Game · C++ & Qt' },
   { s: 6.3, side: -1.6, make: F.sigmaTowers, label: 'Age of Sigma · C# & Unity' },
-  { s: 38.4, side: -1.55, make: F.browserWindow, label: 'This website · Three.js · you are here' },
-].map((m) => ({ ...m, s: m.s * K }));
-// Synapses: arches of light over the line that fire as you pass under them.
-// The one at 20.9 is dusk: from the job to the evenings.
-const ARCHES = [8.3, 10.55, 20.9, 27.0, 28.4, 33.3, 37.5, 39.0].map((s) => ({ s: s * K, cool: s > ML_FROM && s < ML_TO + 1 }));
+].map((m) => ({ ...m, s: m.s * K, lift: 0, scale: 0.95 }));
+// Hidden for now (SHOW.arches): arches of light over the line that fire as you pass under them.
+const ARCHES = [9.3, 11.8, 23.2, 30.2].map((s) => ({ s: s * K, cool: s > ML_FROM && s < ML_TO + 1 }));
 // The rail-data stretch runs on sleepers and rails.
-const RAILS_FROM = 14.4 * K, RAILS_TO = 20.6 * K;
-// Boost pads: drive over one and it throws you forward.
-const PADS = [7.8, 14.2, 20.4].map((s) => s * K);
+const RAILS_FROM = 16.2 * K, RAILS_TO = 23.0 * K;
+// Hidden for now (SHOW.pads): boost pads.
+const PADS = [8.8, 16.0].map((s) => s * K);
 STOPS.forEach((st) => { st.s *= K; });
 CAMPUS.forEach((c) => { c.s *= K; });
-PIT.s *= K;
 
 const R = Math.random;
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
@@ -146,7 +159,7 @@ const DOT_FS = /* glsl */`
 `;
 
 // Each stretch of the lap lies over its own lobe, tinted a little differently (unscaled s, colour).
-const LOBES = [[0, [1.0, 0.74, 0.48]], [8.6, [0.8, 0.62, 1.0]], [14.4, [0.45, 0.95, 0.92]], [20.8, [0.58, 1.0, 0.66]], [27.6, [0.86, 0.93, 1.0]], [34.6, [1.0, 0.62, 0.38]], [39.4, [1.0, 0.74, 0.48]]];
+const LOBES = [[0, [1.0, 0.74, 0.48]], [9.6, [0.8, 0.62, 1.0]], [16.2, [0.45, 0.95, 0.92]], [23.2, [0.58, 1.0, 0.66]], [31.0, [0.86, 0.93, 1.0]], [39.4, [1.0, 0.74, 0.48]]];
 function lobeTint(su) {
   for (let i = 0; i < LOBES.length - 1; i++) {
     const [a, ca] = LOBES[i], [b, cb] = LOBES[i + 1];
@@ -632,7 +645,7 @@ function blockedByPlanet(a, b) {
 
 /* ----------------------------------------------------------------- main -- */
 
-export function createJourney({ small = false, audio = null, root, onFinish = null }) {
+export function createJourney({ small = false, audio = null, root, onFinish = null, onCollect = null }) {
   const group = new THREE.Group();
   group.visible = false;
   const planet = new THREE.Group();
@@ -653,15 +666,15 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
   const line = buildLine(path);
   planet.add(line.mesh);
 
-  // Stops, the pit, and the university buildings behind the first two stops.
-  const stations = [...STOPS, PIT, ...CAMPUS].map((st) => {
+  // Stops and the university buildings across the line from the first two.
+  const stations = [...STOPS, ...CAMPUS].map((st) => {
     const campus = CAMPUS.includes(st);
-    const { pts, uniforms } = buildStation(st.make(small ? (campus ? 6000 : 5000) : (campus ? 11000 : 9000)), st === PIT ? 1.3 : campus ? 2.3 : 1.8);
+    const { pts, uniforms } = buildStation(st.make(small ? (campus ? 6000 : 5000) : (campus ? 11000 : 9000)), campus ? 2.3 : 1.8);
     const holder = new THREE.Group();
     holder.add(pts);
     placeOnPath(path, holder, st.s, st.side * (small ? 0.62 : 1));   // phones see less to the sides
     planet.add(holder);
-    return { ...st, uniforms };
+    return { ...st, uniforms, holder, scale: campus ? 2.3 : 1.8 };
   });
 
   // The lap: the start gantry is also the finish; crossing it again ends the ride.
@@ -681,7 +694,6 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
   const gates = [
     { s: START_GATE, start: true },
     ...STOPS.map((stop, i) => ({ s: stop.s - GATE_AT, spec: () => stopSpec(i) })),
-    { s: PIT.s - GATE_AT, spec: () => ({ kicker: 'pit stop', title: 'Off hours', tone: 'hot' }) },
   ].map((gt) => {
     const gantry = buildGantry(small ? 1.12 : 1.7);
     placeOnPath(path, gantry.g, gt.s, 0);
@@ -690,24 +702,26 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
   });
   const drawGates = () => gates.forEach((gt) => gt.gantry.draw(gt.start ? (s > L / 2 ? FINISH_SPEC : START_SPEC) : gt.spec()));
 
-  // Scenery: project memories on the left, synapse arches, rails, boost pads.
-  const MEM_SCALE = 0.95;
-  const memories = MEMORIES.map((mem) => {
-    const { pts, uniforms } = buildStation(mem.make(small ? 3000 : 5500), MEM_SCALE);
+  // Props with a caption: the hobbies floating in the background (and, when switched on,
+  // the project memories by the line). Hobbies turn slowly, like thoughts.
+  const memories = [...HOBBIES, ...(SHOW.memories ? MEMORIES : [])].map((mem) => {
+    const { pts, uniforms } = buildStation(mem.make(small ? 3000 : 5500), mem.scale);
     const holder = new THREE.Group();
-    holder.add(pts);
-    placeOnPath(path, holder, mem.s, mem.side * (small ? 0.62 : 1));
+    const spin = new THREE.Group();
+    spin.add(pts);
+    holder.add(spin);
+    placeOnPath(path, holder, mem.s, mem.side * (small ? 0.62 : 1), mem.lift);
     planet.add(holder);
-    return { ...mem, holder, uniforms };
+    return { ...mem, holder, spin, uniforms };
   });
-  const arches = ARCHES.map((a) => {
+  const arches = (SHOW.arches ? ARCHES : []).map((a) => {
     const arch = buildArch(a.cool);
     placeOnPath(path, arch.g, a.s, 0);
     planet.add(arch.g);
     return { ...a, ...arch, firedAt: -1e9 };
   });
   planet.add(buildRails(path, RAILS_FROM, RAILS_TO));
-  const pads = PADS.map((ps) => {
+  const pads = (SHOW.pads ? PADS : []).map((ps) => {
     const pad = buildPad();
     placeOnPath(path, pad.g, ps, 0, LIFT + 0.003);
     planet.add(pad.g);
@@ -819,15 +833,16 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
   const st = stEls;
   const cards = [
     { from: -1, to: 1.2 * K, kicker: 'about me', title: root.querySelector('#about-title').textContent, text: root.querySelector('.about-hello .lead').textContent },
-    ...STOPS.map((stop, i) => ({ stop: true, from: stop.s - 4.2 * K, to: stop.s + 2.2 * K, kicker: st[i].querySelector('.station-n').textContent.replace(/\s+/g, ' ').trim(), title: st[i].querySelector('h3').textContent, text: st[i].querySelector('p:not(.station-n):not(.loading)').textContent })),
-    { from: PIT.s - 2.5 * K, to: L - 0.6, pit: true, kicker: 'pit stop · off hours', title: 'Cubes, strings, engines', text: '' },
-    { from: L - 0.6, to: 999, finish: true, kicker: 'finish', title: 'Lap complete', text: 'Drive under the finish line: the camera comes up out of my head and over to the projects.' },
+    ...STOPS.map((stop, i) => ({ stop: true, anchor: i, readBy: stop.s - 1.2 * K, from: stop.s - 4.2 * K, to: stop.s + 2.2 * K, kicker: st[i].querySelector('.station-n').textContent.replace(/\s+/g, ' ').trim(), title: st[i].querySelector('h3').textContent, text: st[i].querySelector('p:not(.station-n):not(.loading)').textContent })),
+    { from: L - 1.2, to: 999, finish: true, kicker: 'finish', title: 'Lap complete', text: '' },
   ];
   let cardShown = -2;
 
   /* ---- state ---- */
   let s = 0, v = 0, phase = 'off', lightsAt = 0, outAt = 0, holdFor = 0, reaction = null, jumped = false;
-  let leaving = false, finishedAt = 0, finishSent = false;
+  let leaving = false, finishedAt = 0, finishSent = false, throttle = 0, quickStart = false;
+  const SKILLS_KEY = 'wk-skills', LIGHTS_KEY = 'wk-lights';
+  const store = { get: (k) => { try { return sessionStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch { /* private mode */ } } };
   let best = Number(localStorage.getItem('wk-f1-best')) || 0;
   let toastUntil = 0, lean = 0;
   const keys = new Set();
@@ -835,6 +850,84 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
   const f2 = { p: new THREE.Vector3(), up: new THREE.Vector3(), fwd: new THREE.Vector3(), right: new THREE.Vector3() };
   const basis = new THREE.Matrix4(), tmp = new THREE.Vector3();
   let w = 1, h = 1, pxPerUnit = 1000;
+
+  // Skills collected earlier in this visit (before a reload) stay collected.
+  try {
+    const had = JSON.parse(store.get(SKILLS_KEY) || '[]');
+    tokens.forEach((t) => {
+      if (t.locked || !had.includes(t.name)) return;
+      t.got = true; t.gotAt = -1e9; t.holder.visible = false;
+      t.slot.textContent = t.short; t.slot.classList.add('got');
+    });
+  } catch { /* nothing stored */ }
+
+  /* ---- the description card: it comes out of its stop ----
+     The text is laid out at once (so nothing jumps), each word faint; then the lines sweep in
+     left to right. At a stop the reading keeps pace with the driving: the last line is in
+     just before you reach the stop. A thin line ties the card to its stop. */
+  const lead = $h('.j-lead'), leadPath = lead.querySelector('path'), leadDot = lead.querySelector('circle');
+  let lines = [], revealed = 0, shownAt = 0, cardC = null, leadOn = false;
+  function fillCard(c, text) {
+    cardC = c;
+    cardText.replaceChildren();
+    const words = text.split(/\s+/).filter(Boolean).map((wd, i, all) => {
+      const sp = document.createElement('span');
+      sp.className = 'w';
+      sp.textContent = wd;
+      cardText.append(sp);
+      if (i < all.length - 1) cardText.append(' ');
+      return sp;
+    });
+    lines = [];
+    let top = null;
+    words.forEach((sp) => {   // group the words into the lines they wrapped to
+      if (sp.offsetTop !== top) { lines.push([]); top = sp.offsetTop; }
+      lines[lines.length - 1].push(sp);
+    });
+    revealed = 0;
+    shownAt = performance.now();
+  }
+  function revealCard() {
+    if (!cardC || cardShown < 0 || !lines.length || !card.classList.contains('is-in')) return;
+    const p = cardC.stop
+      ? clamp01((s - cardC.from) / (cardC.readBy - cardC.from))   // reading pace = driving pace
+      : clamp01((performance.now() - shownAt - 150) / (lines.length * 160));
+    const n = Math.min(lines.length, Math.max(1, Math.ceil(p * lines.length - 1e-6)));
+    for (let batch = 0; revealed < n; batch++, revealed++) {   // several lines at once (a jump): one after another
+      lines[revealed].forEach((sp, k) => { sp.style.transitionDelay = `${batch * 70 + k * 18}ms`; sp.classList.add('on'); });
+    }
+  }
+  function updateLead(cam) {
+    const c = cardShown >= 0 ? cards[cardShown] : null;
+    let show = !!c && c.anchor != null && !leaving && card.classList.contains('is-in');
+    if (show) {
+      const st = stations[c.anchor];
+      st.holder.localToWorld(tmp.set(0, 0.55 * st.scale, 0));
+      if (blockedByPlanet(cam.position, tmp)) show = false;
+      else {
+        tmp.project(cam);
+        const sx = ((tmp.x + 1) / 2) * w, sy = ((1 - tmp.y) / 2) * h;
+        if (tmp.z > 1 || sx < -40 || sx > w + 40 || sy < -40 || sy > h + 40) show = false;
+        else {
+          const x0 = card.offsetLeft, y0 = card.offsetTop, cw = card.offsetWidth, ch = card.offsetHeight;
+          let d;
+          if (w <= 860) {   // phones: the card is docked at the bottom, the line leaves from its top edge
+            const x = Math.max(x0 + 24, Math.min(x0 + cw - 24, sx));
+            d = `M${x},${y0} L${x},${y0 - 16} L${sx},${sy}`;
+          } else if (sy > y0 + ch + 24 && sx > x0 + 20 && sx < x0 + cw - 20) {   // right below the card
+            d = `M${sx},${y0 + ch} L${sx},${y0 + ch + 14} L${sx},${sy}`;
+          } else if (sy > y0 + ch + 24 && sx <= x0 + 20) {
+            d = `M${x0 + 28},${y0 + ch} L${x0 + 28},${y0 + ch + 16} L${sx},${sy}`;
+          } else if (sx > x0 + cw / 2) d = `M${x0 + cw},${y0 + 34} L${x0 + cw + 22},${y0 + 34} L${sx},${sy}`;
+          else d = `M${x0},${y0 + 34} L${x0 - 22},${y0 + 34} L${sx},${sy}`;
+          leadPath.setAttribute('d', d);
+          leadDot.setAttribute('cx', sx.toFixed(1));
+          leadDot.setAttribute('cy', sy.toFixed(1));
+        }
+      }
+    }
+    if (show !== leadOn) { leadOn = show; lead.classList.toggle('is-on', show); }
+  }
 
   function showToast(text, ms = 2200) {
     toast.textContent = text;
@@ -854,6 +947,8 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
       const verdict = reaction < 200 ? 'faster than most F1 drivers' : reaction < 260 ? 'race-ready' : reaction < 400 ? 'solid start' : 'a relaxed start';
       if (!best || reaction < best) { best = reaction; localStorage.setItem('wk-f1-best', String(best)); }
       lightsMsg.innerHTML = `<b>${reaction} ms</b> ${verdict}`;
+      const f1 = memories.find((m) => m.f1);
+      if (f1) { f1.tag.firstChild.textContent = `Formula 1 · your start: ${reaction} ms`; f1.tagW = 0; }
       setTimeout(() => { if (phase === 'drive') lightsEl.classList.remove('is-on'); }, 1800);
       return true;
     }
@@ -872,11 +967,10 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
       cardTitle.textContent = c.title;
       card.classList.toggle('is-stop', !!c.stop);
       const got = tokens.filter((t) => t.got).length;
-      if (c.pit) {
-        cardText.innerHTML = `Speedcubing (11.84 s single), guitar, Formula 1 and games. ${reaction ? `Your start today: <b>${reaction} ms</b>${best ? ` · best <b>${best} ms</b>` : ''}.` : ''} Skills collected: <b>${got}/${total}</b>. Next here: a cube you can turn and a guitar you can play.`;
-      } else if (c.finish) {
-        cardText.innerHTML = `${c.text} Skills on board: <b>${got}/${total}</b>.`;
-      } else cardText.textContent = c.text;
+      const text = c.finish
+        ? `Skills on board: ${got}/${total}.${reaction ? ` Your start: ${reaction} ms.` : ''} Drive under the finish line and the camera comes up out of my head, over to the projects.`
+        : c.text;
+      fillCard(c, text);
       card.classList.add('is-in');
     }, 170);   // the old card is out (160ms), then the new one comes in
   }
@@ -887,6 +981,8 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
     get progress() { return s / S_FIN; },
     /** Length of the lap (the finish line is just past it). */
     get lap() { return L; },
+    /** Names of the skills collected so far. */
+    get collected() { return tokens.filter((t) => t.got).map((t) => t.name); },
     /** Debug: jump along the line. */
     goto(x) { s = Math.max(0, Math.min(S_END, x)); },
     get phase() { return phase; },
@@ -899,9 +995,11 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
       memories.forEach((x) => { x.uniforms.uSize.value = pxu * 0.026; });
       arches.forEach((x) => { x.uniforms.uSize.value = pxu * 0.03; });
     },
-    /** Called when the About opens. The ride resumes where it was; the lights run on every entry. */
+    /** Called when the About opens. The ride resumes where it was; the lights run once per visit. */
     enter() {
       if (phase === 'finished' || s >= S_FIN) s = 0;   // a finished lap: back to the start (the skills stay collected)
+      quickStart = store.get(LIGHTS_KEY) === '1';   // the start lights run once per visit
+      throttle = 0;
       phase = 'arriving';
       leaving = false;
       finishSent = false;
@@ -924,12 +1022,14 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
       toast.classList.remove('is-on');
       hud.classList.remove('is-in');
       card.classList.remove('is-in');
+      lead.classList.remove('is-on'); leadOn = false;
       labels.querySelectorAll(':scope > span').forEach((l) => { l.style.opacity = '0'; });
     },
     /** Wheel / swipe: +down = forward. */
     push(delta, timeStamp) {
       if (!react(timeStamp)) return;
-      v = Math.max(-VMAX, Math.min(Math.max(VMAX, v), v + delta * 0.005));   // a boost may still be above VMAX
+      const d = Math.max(-THROTTLE_MAX_EVENT, Math.min(THROTTLE_MAX_EVENT, delta));   // one big event can't floor it
+      throttle = Math.max(-0.6, Math.min(1, throttle + d * THROTTLE_PER_PX));
     },
     key(e, down) {
       const fwd = ['ArrowUp', 'KeyW', 'PageDown', 'Space', 'ArrowRight', 'KeyD'].includes(e.code);
@@ -950,6 +1050,10 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
       brain.uniforms.uTime.value = t;
       line.uniforms.uTime.value = t;
 
+      if (phase === 'arriving' && arrive >= 1 && quickStart) {
+        phase = 'drive';   // been here before this visit: no lights, just go
+        hud.classList.add('is-in');
+      }
       if (phase === 'arriving' && arrive >= 1) {
         phase = 'lights';
         lightsAt = now;
@@ -970,24 +1074,27 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
           lamps.forEach((l) => l.classList.remove('on'));
           phase = 'go';
           outAt = now;
+          store.set(LIGHTS_KEY, '1');
           if (!jumped) lightsMsg.textContent = 'GO!';
         }
       }
 
-      // Driving: impulses from the wheel, steady push from held keys, friction.
+      // Driving: the speed follows the throttle (quicker up than down), so it never jumps.
       if (phase === 'drive') {
-        if (keys.has('f') && v < VMAX) v = Math.min(VMAX, v + ACCEL * dt);
-        if (keys.has('b')) v = Math.max(-VMAX, v - ACCEL * dt);
-        v *= Math.exp(-FRICTION * dt);
-        if (Math.abs(v) < 0.01) v = 0;
+        if (keys.has('f')) throttle = Math.min(1, throttle + dt * 2.5);   // a held key opens it up over ~0.4 s
+        if (keys.has('b')) throttle = Math.max(-0.6, throttle - dt * 2.5);
+        if (!keys.size) throttle *= Math.exp(-THROTTLE_FADE * dt);
+        const target = throttle * VMAX + BOOST * Math.exp(-(now - boostAt) / 700) * (SHOW.pads ? 1 : 0);
+        const tau = Math.abs(target) > Math.abs(v) ? SPEED_UP : SLOW_DOWN;
+        v += (target - v) * (1 - Math.exp(-dt / tau));
+        if (Math.abs(v) < 0.01 && Math.abs(throttle) < 0.01) v = 0;
         const s0 = s;
         s += v * dt;
         if (s < 0) { s = 0; v = 0; }
         pads.forEach((pd) => {   // rolling forward over a boost pad
           if (v > 0 && s0 < pd.s && s >= pd.s && now - pd.hitAt > 1200) {
             pd.hitAt = now;
-            boostAt = now;
-            v = Math.min(VMAX + BOOST, v + BOOST);
+            boostAt = now;   // the push fades in through the speed's own smoothing
             audio?.whoosh(true);
           }
         });
@@ -999,7 +1106,7 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
         }
       }
       if (phase === 'finished') {   // roll on through the finish, then up and out to the projects
-        v = Math.max(v, 1.4);
+        v += (Math.max(1.4, v) - v) * (1 - Math.exp(-dt / SPEED_UP));
         s = Math.min(S_END + 4, s + v * dt);
         if (!finishSent && now - finishedAt > 700) { finishSent = true; onFinish?.(); }
       }
@@ -1024,7 +1131,9 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
       stations.forEach((x) => { x.uniforms.uK.value = smoothstep(x.s - 7.5 * K, x.s - 3 * K, s); });
 
       // Memories assemble like the stops; synapses pulse and fire overhead; pads stream.
-      memories.forEach((m) => { m.uniforms.uK.value = smoothstep(m.s - 6 * K, m.s - 2.5 * K, s); });
+      memories.forEach((m) => {
+        m.uniforms.uK.value = smoothstep(m.s - 8 * K, m.s - 4 * K, s);
+      });
       arches.forEach((a) => {
         a.uniforms.uTime.value = t;
         if (Math.abs(a.s - s) < 0.12 && now - a.firedAt > 1500) a.firedAt = now;
@@ -1053,6 +1162,8 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
             tk.gotAt = now;
             tk.fly = true;
             audio?.collect();
+            store.set(SKILLS_KEY, JSON.stringify(tokens.filter((x) => x.got).map((x) => x.name)));
+            onCollect?.(tk.name);
           }
         }
         if (tk.got) {
@@ -1089,27 +1200,35 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
       cam.up.set(0, 1, 0);
       cam.lookAt(tmp.lerpVectors(fromLook, toLook, e));
       const kick = Math.exp(-(performance.now() - boostAt) / 550);   // a boost widens the view for a moment
-      cam.fov = 40 + (chaseFov - 40) * e + 9 * kick * e;
+      cam.fov = 40 + (chaseFov - 40) * e + 4 * kick * e;
       cam.updateProjectionMatrix();
       cam.updateMatrixWorld();
       brain.uniforms.uFogNear.value = 5 + (1 - e) * 30;
       brain.uniforms.uFogFar.value = 11 + (1 - e) * 40;
 
       // Labels over the tokens ahead, and chips flying into the inventory.
+      revealCard();
+      updateLead(cam);
+
       // Memories: a quiet caption over each project shape while it is ahead of you.
       const memOn = phase !== 'off' && !leaving && k >= 1;
       memories.forEach((m) => {
+        if (m.lift) {   // the floating ones face you, swaying a little, like a thought turning over
+          m.spin.lookAt(cam.position);
+          m.spin.rotateY(Math.sin(t * 0.4 + m.s) * 0.35);
+        }
         const ahead = m.s - s;
-        let op = memOn ? smoothstep(4, 2.8, ahead) * smoothstep(0.5, 1.3, ahead) : 0;   // gone before it passes the camera
+        let op = memOn ? smoothstep(4.6, 3.2, ahead) * smoothstep(0.5, 1.3, ahead) : 0;   // gone before it passes the camera
         if (op > 0) {
-          m.holder.localToWorld(tmp.set(0, (0.5 + 0.62) * MEM_SCALE, 0));
+          m.holder.localToWorld(tmp.set(0, (0.5 + 0.62) * m.scale, 0));
           if (blockedByPlanet(cam.position, tmp)) op = 0;
           else {
             tmp.project(cam);
-            if (tmp.z < 1) {
-              m.tagW ||= m.tag.offsetWidth;   // the text never changes: measure once
+            const rawX = ((tmp.x + 1) / 2) * w;
+            if (tmp.z < 1 && rawX > 0 && rawX < w) {   // only while the thing itself is on screen
+              m.tagW ||= m.tag.offsetWidth;   // measure once (again after the F1 text changes)
               const half = m.tagW / 2 + 10;
-              const x = Math.max(half, Math.min(w - half, ((tmp.x + 1) / 2) * w));
+              const x = Math.max(half, Math.min(w - half, rawX));
               m.tag.style.transform = `translate(${x}px, ${((1 - tmp.y) / 2) * h}px) translate(-50%, -100%)`;
             }
             else op = 0;

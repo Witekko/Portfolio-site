@@ -77,9 +77,12 @@ Pierwszy zarys (przewijane rozdziały z linią z boku) odpadł: kamera nie wchod
 - **Umiejętności** to żetony na linii (z CV); robot je zbiera do ekwipunku na dole. Najbliższy żeton ma ostrą nazwę aż do zebrania, dalsze są rozmyte. Najechanie na slot w ekwipunku pokazuje opis umiejętności i skąd jest. Odcinek ML: linia przerywana i zablokowane żetony „?” (zapadają się w mózg).
 - **Rozdział 03 to dwa równorzędne etapy:** praca „by day” (wagon, tory, po prawej) i IKE Tracker „evenings” (wykres jako stacja, po lewej, własna brama i karta). IKE jest tak samo ważny w szukaniu pracy.
 - **Uczelnie:** budynki z cząsteczek po lewej przy etapach 01 (politechnika: wieża z zegarem, okna laboratoriów, kopuła) i 02 (portyk z kolumnami i szklane skrzydło).
-- **Sceneria:** wspomnienia projektów po lewej z podpisami (line follower, kółko i krzyżyk, gra taneczna, Age of Sigma, ta strona), łuki synaps nad linią, które błyskają przy przejeździe, tory na odcinku kolejowym, 3 pola przyspieszenia, płaty mózgu w lekko innych kolorach. Okrążenie krótsze (mniejsza planeta).
+- **Sceneria:** tory na odcinku kolejowym, płaty mózgu w lekko innych kolorach, hobby (bolid F1, pad, kostka, gitara) unoszące się nad linią jak myśli, z podpisami. Łuki synaps, wspomnienia projektów i pola przyspieszenia są schowane (`SHOW` w journey.js), wrócą tam, gdzie będzie pusto. Okrążenie ~28.
 - **Ruch (przegląd skillem Emila):** wspólne krzywe `--ease-out` i `--ease-in-out`, wyjście szybsze niż wejście (karta, komunikat, Esc 1,8 s zamiast 3 s), okienko w ekwipunku rośnie ze slotu i między slotami przeskakuje bez animacji, hover tylko przy myszy.
-- **Pit stop:** kostka przy linii, karta z hobby, czasem reakcji i liczbą umiejętności (interakcje kostki i gitary później).
+- **Bez pit stopu:** meta zaraz po ML. Hobby są w tle trasy, czas reakcji F1 pokazuje podpis bolidu i karta mety. Światła F1 tylko przy pierwszym wejściu w sesji.
+- **Opis etapu:** karta po lewej u góry z linią do stacji; tekst odsłania się linijkami w tempie jazdy.
+- **Wejście:** pierwsze przewinięcie w dół z hero wjeżdża w głowę (raz na wizytę), „Skip to projects →” stale w rogu. Przy projektach „built with” pokazuje, które umiejętności zebrano w jeździe.
+- **Sterowanie:** kółko, gładzik i przesunięcie palcem ustawiają gaz, prędkość dochodzi do niego płynnie.
 - **Meta:** trasa to zamknięte okrążenie, brama START na końcu staje się metą „Projects →”. Za metą kamera wznosi się nad planetę, ciemność i lądowanie nisko przy podłodze robota, w pierwszym projekcie.
 - **Z projektów do środka:** „About” w projektach prowadzi przez podłogę pod robotem zamiast przez twarz; „Back” wraca tą samą drogą. „Projects” w menu w trakcie jazdy też wychodzi przez robota.
 - Bez WebGL albo przy ograniczonym ruchu zostają zwykłe rozdziały (about.js).

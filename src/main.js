@@ -224,7 +224,7 @@ async function init() {
   const floor = createFloor({ y: FLOOR_Y, base: BASE, pool: { x: 1.0, z: -3 } });
   robot.stage.add(floor.points);
   // About as a ride around a brain-planet (not with reduced motion: there the plain chapters).
-  const journey = reduceMotion ? null : createJourney({ small: isSmall(), audio, root: aboutEl, onFinish: () => closeAbout('#p-ike') });
+  const journey = reduceMotion ? null : createJourney({ small: isSmall(), audio, root: aboutEl, onFinish: () => closeAbout('#p-ike'), onCollect: () => renderSkills() });
   if (journey) scene.add(journey.group);
   const veil = aboutEl.querySelector('.j-veil');
   const J_CUT = 0.42;            // About tween: before this the camera dives into the face, after it the ride
@@ -382,6 +382,7 @@ async function init() {
   function closeAbout(to = null) {
     if (aboutTarget === 0) return;
     aboutTarget = 0;
+    markRide();
     exitTo = journey && to ? to : null;
     slowExit = !!exitTo;
     if (exitTo) portal = 'robot';
@@ -394,7 +395,9 @@ async function init() {
     lastFocus?.focus?.({ preventScroll: true });
   }
   document.querySelectorAll('[data-open-about]').forEach((el) => el.addEventListener('click', (e) => { e.preventDefault(); openAbout(); }));
-  closeBtn.addEventListener('click', closeAbout);
+  closeBtn.addEventListener('click', () => closeAbout());
+  // Skip the ride: straight to the projects (through the robot, like the finish).
+  $('#j-skip')?.addEventListener('click', () => closeAbout('#p-ike'));
   addEventListener('keydown', (e) => {
     if (aboutTarget !== 1) return;
     if (e.key === 'Escape') closeAbout();
@@ -404,6 +407,64 @@ async function init() {
       if (i < 0 || (e.shiftKey ? i === 0 : i === items.length - 1)) { e.preventDefault(); items[e.shiftKey ? items.length - 1 : 0].focus(); }
     }
   });
+  /* ---- From the hero, scrolling down enters the ride (once per visit) ----
+     The same wheel that scrolled the page now drives. Leaving the ride in any way (finish,
+     skip, Back) or jumping to a section with a link lets the page scroll normally again. */
+  const RIDE_KEY = 'wk-ride';
+  function rideSeen() { try { return sessionStorage.getItem(RIDE_KEY) === '1'; } catch { return false; } }
+  function markRide() { try { sessionStorage.setItem(RIDE_KEY, '1'); } catch { /* private mode */ } hintMode = ''; }
+  const rideGate = () => !!journey && introDone && entered && aboutTarget === 0 && aboutT === 0 && inspectTarget === 0 && scrollY < 8 && !rideSeen();
+  // Capture phase: this runs before Lenis, and opening the ride stops Lenis, so the page doesn't move.
+  addEventListener('wheel', (e) => { if (e.deltaY > 0 && rideGate()) openAbout(); }, { capture: true, passive: true });
+  addEventListener('keydown', (e) => {
+    if (['PageDown', 'ArrowDown', ' '].includes(e.key) && !e.target.closest?.('input, textarea, button, a') && rideGate()) { e.preventDefault(); openAbout(); }
+  }, true);
+  let gateTouchY = null;
+  addEventListener('touchstart', (e) => { gateTouchY = rideGate() ? e.touches[0].clientY : null; }, { passive: true });
+  addEventListener('touchmove', (e) => {
+    if (gateTouchY === null) return;
+    const dy = gateTouchY - e.touches[0].clientY;   // > 0: the finger goes up, the page would scroll down
+    if (dy > 4) e.preventDefault();
+    if (dy > 24) { gateTouchY = null; openAbout(); }
+  }, { passive: false });
+
+  /* ---- Projects: "built with", the skills you collected in the ride light up ---- */
+  function renderSkills() {
+    const have = new Set(journey ? journey.collected : []);
+    projectEls.forEach((el) => {
+      const names = (el.dataset.skills || '').split(',').map((x) => x.trim()).filter(Boolean);
+      if (!names.length) return;
+      let box = el.querySelector('.built');
+      if (!box) {
+        box = document.createElement('p');
+        box.className = 'built mono';
+        el.querySelector('.copy').appendChild(box);
+      }
+      box.replaceChildren();
+      const label = document.createElement('span');
+      label.className = 'built-label';
+      label.textContent = 'built with';
+      box.append(label);
+      names.forEach((n) => {
+        const chip = document.createElement('span');
+        chip.className = 'built-chip' + (journey ? (have.has(n) ? ' got' : ' missing') : '');
+        chip.textContent = n;
+        if (journey) chip.title = have.has(n) ? 'collected in the ride' : 'still out on the line in About';
+        box.append(chip);
+      });
+      if (journey && names.some((n) => !have.has(n))) {
+        const go = document.createElement('a');
+        go.href = '#about';
+        go.className = 'built-go';
+        go.setAttribute('data-open-about', '');   // not an in-page scroll: it opens the ride
+        go.textContent = 'collect them in my head →';
+        go.addEventListener('click', (e) => { e.preventDefault(); openAbout(); });
+        box.append(go);
+      }
+    });
+  }
+  renderSkills();
+
   /* ---- The ride: wheel, keys, a swipe drive; a tap is a reaction at the start lights ---- */
   if (journey) {
     const riding = () => aboutTarget === 1;
@@ -537,6 +598,7 @@ async function init() {
   document.addEventListener('click', (e) => {
     const a = e.target.closest('a[href^="#"]');
     if (!a || a.hasAttribute('data-open-about') || a.classList.contains('skip')) return;
+    if (a.getAttribute('href') !== '#top') markRide();
     if (!introDone) { e.preventDefault(); pendingHash = a.getAttribute('href'); hurry(); return; }
     if (aboutTarget === 1) {   // a link in the nav while inside the head: step out, then go
       const href = a.getAttribute('href');
@@ -611,6 +673,7 @@ async function init() {
       aboutEl.classList.remove('is-journey');
       document.body.classList.remove('is-about');
       slowExit = false;
+      renderSkills();
     }
     const a = easeInOut(aboutT);
     // The ride: dive (aboutT < J_CUT), a black frame at the cut, then the brain-planet.
@@ -818,7 +881,7 @@ async function init() {
     const mode = write < 1 ? 'write' : intro < 1 ? 'morph' : 'done';
     if (mode !== hintMode) {
       hintMode = mode;
-      hintText.textContent = { write: 'writing signature…', morph: 'building the head in 3D…', done: isTouch ? 'drag to turn my head · tap my face to meet me' : 'I follow your cursor · click my face to meet me' }[mode];
+      hintText.textContent = { write: 'writing signature…', morph: 'building the head in 3D…', done: journey && !rideSeen() ? (isTouch ? 'swipe up to ride into my head · or tap my face' : 'scroll to ride into my head · or click my face') : isTouch ? 'drag to turn my head · tap my face to meet me' : 'I follow your cursor · click my face to meet me' }[mode];
     }
 
     renderer.render(scene, camera);

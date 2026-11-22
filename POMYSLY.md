@@ -25,8 +25,35 @@ Pomysły do portfolio, odłożone na później. Prototyp, którego dotyczą: [pr
 
 ## Następne etapy
 
-1. **Nowa karta „O mnie”** (przed mini-demami).
+1. ~~**Nowa karta „O mnie”**~~: zrobiona jako jazda line followerem po mózgu-planecie (szczegóły w KLIMAT.md i niżej).
 2. **Grywalne mini-demo z manipulatorem:** Tic-Tac-Toe z robotem stawiającym znaki, Line Follower po narysowanej linii, interaktywny wykres IKE.
+
+## Jazda po mózgu („O mnie”): plan poprawek
+
+Z przeglądu animacji (skill improve-animations, Emil Kowalski) i uwag po przejeździe.
+
+**Zrobione w tej rundzie:**
+
+- [x] **Przyspieszenie jak bug:** pola przyspieszenia schowane. Kółko i gładzik ustawiają teraz „gaz”, a prędkość dochodzi do niego płynnie (~0,3 s w górę, ~0,5 s w dół). Jedno duże zdarzenie albo bezwładność gładzika nie szarpie robotem.
+- [x] **Za długo, hobby za późno:** mniejsza planeta (okrążenie ~28 zamiast ~33), bez pit stopu na końcu, meta zaraz po ML. Hobby (bolid F1, pad, kostka, gitara) unoszą się nad linią jak myśli, z podpisami, w przerwach między etapami. Podpis F1 pokazuje twój czas reakcji.
+- [x] **Światła F1** tylko przy pierwszym wejściu w sesji, potem od razu jazda.
+- [x] **Opis etapu wychodzi z etapu:** pomarańczowa linia od karty do stacji rysuje się, a na stacji ląduje kropka. Tekst jest od razu ułożony (blady), linijki wchodzą od lewej w tempie jazdy i ostatnia jest przed dojazdem do stacji. Karta ma pełne tło i większy tekst.
+- [x] **Pomijanie sekcji:** pierwsze przewinięcie w dół z hero wjeżdża w głowę (raz na wizytę). Przycisk „Skip to projects →” jest stale w rogu, a „Projects” w menu też pomija. Po jeździe, pominięciu albo skoku linkiem strona przewija się normalnie.
+- [x] **Projekty odsyłają do jazdy:** przy projekcie „built with” i lista umiejętności. Zebrane w jeździe są pomarańczowe, brakujące przerywane, plus link „collect them in my head →”.
+
+**Schowane na później** (kod jest, przełączniki `SHOW` w `src/journey.js`). Dodamy tam, gdzie na trasie zrobi się pusto:
+
+- [ ] Łuki synaps nad linią (błyskają przy przejeździe).
+- [ ] Wspomnienia projektów przy linii (line follower, kółko i krzyżyk, gra taneczna, Age of Sigma).
+- [ ] Pola przyspieszenia (jeśli wrócą: widoczne z daleka i z łagodnym rozpędem).
+
+**Pomysły na dalej:**
+
+- [ ] Hasła namalowane na drodze, np. „11.84 s”, „50 respondents”, „FIFO”: krótkie, czytane w przejeździe.
+- [ ] Zapowiedź jazdy w hero: kawałek linii i robot czekający pod bramą START.
+- [ ] Jedna linijka „O mnie w 10 sekund” pod hero dla tych, którzy nie pojadą.
+- [ ] Kostka do kręcenia (sama się układa w 11,84 s) i gitara z prawdziwymi strunami, tam gdzie unoszą się ich myśli.
+- [ ] Sprawdzić na prawdziwym gładziku i telefonie, czy gaz jest dobrze wyważony.
 
 ## Pomysły na kliknięcie w kartę
 

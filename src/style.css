@@ -235,17 +235,34 @@ h2 { margin: 0; font-size: clamp(36px, 4.4vw, 64px); line-height: 1; letter-spac
 .j-lights-msg { margin: 0; font-size: 13px; color: var(--muted); text-align: center; min-height: 1.4em; }
 .j-lights-msg b { color: var(--ink); font-size: 20px; font-weight: 500; margin-right: 6px; }
 .j-card {
-  position: absolute; left: var(--pad); top: 136px; width: min(25rem, calc(100vw - 2 * var(--pad)));
-  padding: 20px 22px; border-radius: 16px; background: rgba(5, 11, 26, .78); border: 1px solid var(--line);
+  position: absolute; left: var(--pad); top: 136px; width: min(27rem, calc(100vw - 2 * var(--pad)));
+  padding: 22px 24px; border-radius: 16px; background: rgba(6, 12, 28, .94); border: 1px solid rgba(120, 165, 255, .28);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .45), inset 3px 0 0 var(--hot);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   opacity: 0; transform: translateX(-12px); filter: blur(2px);
   transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out), filter 160ms var(--ease-out);
 }
 .j-card.is-in { opacity: 1; transform: none; filter: none; transition-duration: 280ms; }
+.j-card.is-right { left: auto; right: var(--pad); transform: translateX(12px); box-shadow: 0 18px 48px rgba(0, 0, 0, .45), inset -3px 0 0 var(--hot); }
+.j-card.is-right.is-in { transform: none; }
 .j-card.is-stop h3 { font-size: clamp(17px, 1.4vw, 20px); }   /* the gantry carries the big title */
 .j-kicker { margin: 0 0 8px; font-size: 12px; color: var(--hot); letter-spacing: .04em; }
 .j-card h3 { margin: 0; font-size: clamp(22px, 2vw, 28px); font-weight: 600; letter-spacing: -.02em; line-height: 1.15; }
-.j-text { margin: 10px 0 0; color: #c3d0e8; font-size: 15px; line-height: 1.55; text-wrap: pretty; }
+.j-text { margin: 12px 0 0; color: #dbe5f7; font-size: 16.5px; line-height: 1.6; text-wrap: pretty; }
+/* Words are laid out at once (faint), then each line sweeps in left to right. */
+.j-text .w { display: inline-block; opacity: .16; filter: blur(2px); transform: translateY(3px); transition: opacity 260ms var(--ease-out), filter 260ms var(--ease-out), transform 260ms var(--ease-out); }
+.j-text .w.on { opacity: 1; filter: none; transform: none; }
+/* The line from the card to its stop: draws itself out, a dot lands on the stop. */
+.j-lead { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.j-lead path { fill: none; stroke: var(--hot); stroke-width: 1.25; stroke-opacity: .75; stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 120ms var(--ease-out); }
+.j-lead circle { fill: var(--hot); opacity: 0; transition: opacity 120ms var(--ease-out); filter: drop-shadow(0 0 6px var(--hot)); }
+.j-lead.is-on path { stroke-dashoffset: 0; transition-duration: 450ms; }
+.j-lead.is-on circle { opacity: 1; transition: opacity 200ms var(--ease-out) 380ms; }
+/* Skip the ride: always there, top right. */
+.j-skip { position: absolute; top: 76px; right: var(--pad); padding: 8px 14px; font-size: 12px; color: var(--ink); background: rgba(10, 21, 48, .85); border: 1px solid var(--line); border-radius: 999px; cursor: pointer; pointer-events: auto; opacity: 0; transition: opacity 300ms var(--ease-out), transform 160ms var(--ease-out), background-color 160ms ease; }
+.about.is-open .j-skip { opacity: 1; transition-delay: 400ms, 0ms, 0ms; }
+.j-skip:active { transform: scale(.97); }
+@media (hover: hover) and (pointer: fine) { .j-skip:hover { background: #142650; } }
 .j-text b { color: var(--ink); font-weight: 500; }
 .j-labels > span:not(.j-chip) { position: fixed; left: 0; top: 0; opacity: 0; will-change: transform, opacity; }
 .j-labels > span > b, .j-chip { display: block; padding: 3px 8px; border-radius: 999px; font: 500 11px var(--mono); white-space: nowrap; color: #dce8ff; background: rgba(20, 45, 110, .75); border: 1px solid rgba(120, 165, 255, .45); }
@@ -288,7 +305,9 @@ h2 { margin: 0; font-size: clamp(36px, 4.4vw, 64px); line-height: 1; letter-spac
   .j-lights { top: 124px; }
   .j-card { top: auto; bottom: 60px; left: 12px; width: calc(100vw - 24px); padding: 12px 14px; }
   .j-card h3 { font-size: 20px; }
-  .j-text { font-size: 13px; line-height: 1.45; }
+  .j-text { font-size: 14px; line-height: 1.5; }
+  .j-card.is-right { right: auto; left: 12px; }
+  .j-skip { top: 76px; right: 12px; }
   .j-inv { bottom: 10px; padding: 6px 10px; gap: 4px; }
   .j-inv > p { font-size: 11px; }
   .j-slots { flex-wrap: nowrap; gap: 4px; }
@@ -297,6 +316,15 @@ h2 { margin: 0; font-size: clamp(36px, 4.4vw, 64px); line-height: 1; letter-spac
   .j-hint { bottom: auto; top: 190px; }
   .j-toast { bottom: auto; top: 220px; white-space: nowrap; font-size: 11px; }
 }
+
+/* Projects: "built with". Skills collected in the ride are lit. */
+.built { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 14px 0 0; font-size: 11px; }
+.built-label { color: var(--muted); margin-right: 4px; }
+.built-chip { padding: 3px 8px; border-radius: 999px; color: #c3d0e8; border: 1px solid var(--line); }
+.built-chip.got { color: var(--hot); border-color: rgba(255, 138, 61, .55); background: rgba(255, 138, 61, .08); }
+.built-chip.missing { color: #7d8aa6; border-style: dashed; }
+.built-go { margin-left: 4px; color: var(--hot); text-decoration: none; }
+@media (hover: hover) and (pointer: fine) { .built-go:hover { text-decoration: underline; } }
 
 /* Off hours: things to play with. */
 .off-hours h3 { margin: 0; font-size: clamp(30px, 3vw, 42px); font-weight: 600; letter-spacing: -.02em; }

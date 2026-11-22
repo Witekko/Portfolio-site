@@ -607,6 +607,78 @@ export function campusEcon(N) {
   ], { tilt: 0.12, scale: 0.95 });
 }
 
+/* --------------------------------------------- About: hobbies (backdrop) -- */
+
+/** An acoustic guitar: figure-eight body, a glowing sound hole, neck, six strings. */
+export function guitar(N) {
+  const lower = { y: -0.33, r: 0.19 }, upper = { y: -0.08, r: 0.14 };
+  const inBody = (x, y) => (x * x) / (lower.r * lower.r) + ((y - lower.y) ** 2) / (lower.r * lower.r * 1.1) < 1 || (x * x) / (upper.r * upper.r) + ((y - upper.y) ** 2) / (upper.r * upper.r) < 1;
+  const strings = Array.from({ length: 6 }, (_, k) => lerp(-0.026, 0.026, k / 5));
+  return build(N, [
+    { w: 0.3, fn: () => {   // the body's outline
+      const c = R() < 0.6 ? lower : upper, a = R() * TAU;
+      const x = Math.cos(a) * c.r, y = c.y + Math.sin(a) * c.r * (c === lower ? 1.05 : 1);
+      if (inBody(x * 1.01, y + (y - c.y) * 0.01) && Math.abs(y - (lower.y + upper.y) / 2) < 0.08) return [x, y, 0, blue(0.4), 0];
+      return [x, y, jit(0.02), blue(0.7 + R() * 0.2), 0.9];
+    } },
+    { w: 0.16, fn: () => {   // the top, faint
+      let x, y;
+      do { x = lerp(-0.2, 0.2, R()); y = lerp(-0.53, 0.06, R()); } while (!inBody(x, y));
+      return [x, y, 0, blue(0.35 + R() * 0.15), 0.4];
+    } },
+    { w: 0.08, fn: () => { const a = R() * TAU, r = 0.055 + jit(0.008); return [Math.cos(a) * r, -0.2 + Math.sin(a) * r, 0.005, hot(1.0), 1]; } },   // sound hole
+    { w: 0.14, fn: () => [...onBox(-0.032, 0.032, 0.02, 0.4, -0.015, 0.015), blue(0.55), 0.85] },   // neck
+    { w: 0.06, fn: () => [...onBox(-0.045, 0.045, 0.4, 0.52, -0.015, 0.015), blue(0.65), 0.85] },   // headstock
+    { w: 0.04, fn: () => [lerp(-0.04, 0.04, R()), 0.02 + Math.round(R() * 12) * 0.03, 0.017, blue(0.9), 0.85] },   // frets
+    { w: 0.18, fn: () => { const x = strings[(R() * 6) | 0]; return [x * lerp(1.5, 1, R()) , lerp(-0.4, 0.46, R()), 0.022, [0.95, 0.96, 1], 0.95]; } },   // strings
+    { w: 0.04, fn: () => [lerp(-0.07, 0.07, R()), -0.4 + jit(0.012), 0.02, hot(0.9), 0.95] },   // bridge
+  ], { scale: 0.95 });
+}
+
+/** A Formula 1 car, three-quarter view: nose, sidepods, halo, wings, four wheels. */
+export function f1Car(N) {
+  const wheels = [[-0.36, -0.2], [-0.36, 0.2], [0.34, -0.21], [0.34, 0.21]];
+  return build(N, [
+    { w: 0.26, fn: () => {   // the body: a tapering tub from the nose back to the engine cover
+      const x = lerp(-0.62, 0.42, R()), t = (x + 0.62) / 1.04;
+      const w = lerp(0.03, 0.11, Math.min(1, t * 1.6)), h = lerp(0.02, 0.09, Math.min(1, t * 1.4));
+      const a = R() * Math.PI;
+      return [x, -0.06 + Math.sin(a) * h, Math.cos(a) * w, blue(0.55 + R() * 0.25), 0.85];
+    } },
+    { w: 0.12, fn: () => { const s = R() < 0.5 ? -1 : 1; return [...onBox(-0.15, 0.25, -0.1, -0.02, s * 0.11, s * 0.2), blue(0.5), 0.8]; } },   // sidepods
+    { w: 0.06, fn: () => { const a = lerp(0.2, Math.PI - 0.2, R()); return [-0.06 + Math.cos(a) * 0.1, 0.06 + Math.sin(a) * 0.05, jit(0.02), hot(1.0), 1]; } },   // the halo
+    { w: 0.1, fn: () => [...onBox(-0.72, -0.6, -0.13, -0.11, -0.26, 0.26), blue(0.75), 0.9] },   // front wing
+    { w: 0.12, fn: () => (R() < 0.7 ? [...onBox(0.48, 0.6, 0.12, 0.16, -0.22, 0.22), blue(0.8), 0.9] : [lerp(0.48, 0.6, R()), lerp(-0.05, 0.14, R()), (R() < 0.5 ? -1 : 1) * 0.22, blue(0.6), 0.85]) },   // rear wing
+    { w: 0.04, fn: () => [lerp(-0.6, 0.4, R()), -0.02 + jit(0.006), jit(0.12), hot(0.9), 0.9] },   // a stripe down the middle
+    { w: 0.24, fn: () => {   // wheels
+      const [x, z] = wheels[(R() * 4) | 0], a = R() * TAU, r = 0.1;
+      return [x + Math.cos(a) * r, -0.08 + Math.sin(a) * r, z + (R() - 0.5) * 0.09, blue(0.3 + R() * 0.2), 0.95];
+    } },
+    { w: 0.06, fn: () => { const x = Math.round(lerp(-8, 8, R())) / 10; return [x, -0.19, lerp(-0.35, 0.35, R()), blue(0.3), 0.3]; } },   // the track
+  ], { tilt: 0.35, scale: 0.85 });
+}
+
+/** A game controller: grips, a d-pad, four buttons (one orange), two sticks. */
+export function gamepad(N) {
+  const outline = (t) => {   // a rounded shape with two grips, t in 0..1 around it
+    const a = t * TAU, x = Math.cos(a) * 0.42;
+    const grip = Math.max(0, -Math.sin(a)) * (0.12 + 0.1 * Math.abs(Math.cos(a)) ** 4);
+    return [x, Math.sin(a) * 0.17 - grip * Math.abs(Math.cos(a)) * 1.4, 0];
+  };
+  return build(N, [
+    { w: 0.34, fn: () => { const [x, y] = outline(R()); return [x + jit(0.01), y + jit(0.01), jit(0.06), blue(0.6 + R() * 0.25), 0.9]; } },
+    { w: 0.16, fn: () => { const [x, y] = outline(R()), k = R() ** 0.6; return [x * k, y * k, 0.03, blue(0.3 + R() * 0.15), 0.4]; } },
+    { w: 0.12, fn: () => (R() < 0.5 ? [lerp(-0.31, -0.17, R()), 0.02 + jit(0.03), 0.04, blue(0.85), 0.95] : [-0.24 + jit(0.03), lerp(-0.05, 0.09, R()), 0.04, blue(0.85), 0.95]) },   // d-pad
+    { w: 0.16, fn: () => {   // buttons
+      const b = [[0.24, 0.08], [0.31, 0.02], [0.24, -0.04], [0.17, 0.02]][(R() * 4) | 0];
+      const p = onSphere(b[0], b[1], 0.04, 0.026);
+      return [...p, b[0] === 0.31 ? hot(1.0) : blue(0.9), 1];
+    } },
+    { w: 0.14, fn: () => { const c = R() < 0.5 ? [-0.1, -0.1] : [0.1, -0.1], a = R() * TAU, r = 0.05; return [c[0] + Math.cos(a) * r, c[1] + Math.sin(a) * r, 0.05, blue(0.75), 0.9]; } },   // sticks
+    { w: 0.08, fn: () => [lerp(-0.06, 0.06, R()), 0.08 + jit(0.01), 0.04, hot(0.7), 0.8] },   // the centre light
+  ], { tilt: 0.25, scale: 1.0 });
+}
+
 /* ------------------------------------------------------- signature: pen -- */
 
 /**
