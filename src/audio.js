@@ -252,6 +252,19 @@ export function createAudio() {
         o.connect(g).connect(n.sfx); o.start(t + d); o.stop(t + d + 0.55);
       });
     },
+    /** Crossing the finish line: a soft rising chord. */
+    finish() {
+      if (!enabled) return;
+      const t = ctx.currentTime;
+      [[523.25, 0], [659.25, 0.09], [783.99, 0.18], [1046.5, 0.27]].forEach(([fq, d]) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = fq;
+        g.gain.setValueAtTime(0, t + d);
+        g.gain.linearRampToValueAtTime(0.045, t + d + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + d + 1.1);
+        o.connect(g).connect(n.sfx); o.start(t + d); o.stop(t + d + 1.2);
+      });
+    },
     /** A short beep (F1 start lights). */
     blip(freq = 660) {
       if (!enabled) return;

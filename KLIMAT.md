@@ -73,9 +73,11 @@ Pierwszy zarys (przewijane rozdziały z linią z boku) odpadł: kamera nie wchod
 - **Wejście:** kamera wlatuje w twarz, przez moment ciemno, a potem widać mózg-planetę z góry i kamera zjeżdża za line followera.
 - **Start:** światła F1, pierwszy ruch po zgaśnięciu to czas reakcji (do usunięcia, jeśli się nie sprawdzi).
 - **Jazda:** kółko, strzałki albo przesunięcie palcem to gaz; kamera zza robota jak w grze. Planeta obraca się pod robotem, horyzont się zakrzywia.
-- **Etapy** wyrastają po prawej z cząsteczek: ramię robota, praca o G2, wagon z danymi, sieć ML w 37%.
-- **Umiejętności** to żetony na linii (z CV); robot je zbiera do ekwipunku na dole. Odcinek ML: linia przerywana i zablokowane żetony „?”.
-- **Pit stop** na końcu: kostka, gitara i F1 (na razie opis, interakcje później).
+- **Etapy** wyrastają po prawej z cząsteczek: ramię robota, praca o G2, wagon z danymi, sieć ML w 37%. Przed każdym stoi brama nad linią z nazwą etapu (jak na torze), robot przejeżdża pod nią.
+- **Umiejętności** to żetony na linii (z CV); robot je zbiera do ekwipunku na dole. Najbliższy żeton ma ostrą nazwę aż do zebrania, dalsze są rozmyte. Najechanie na slot w ekwipunku pokazuje opis umiejętności i skąd jest. Odcinek ML: linia przerywana i zablokowane żetony „?” (zapadają się w mózg).
+- **Pit stop:** kostka przy linii, karta z hobby, czasem reakcji i liczbą umiejętności (interakcje kostki i gitary później).
+- **Meta:** trasa to zamknięte okrążenie, brama START na końcu staje się metą „Projects →”. Za metą kamera wznosi się nad planetę, ciemność i lądowanie nisko przy podłodze robota, w pierwszym projekcie.
+- **Z projektów do środka:** „About” w projektach prowadzi przez podłogę pod robotem zamiast przez twarz; „Back” wraca tą samą drogą. „Projects” w menu w trakcie jazdy też wychodzi przez robota.
 - Bez WebGL albo przy ograniczonym ruchu zostają zwykłe rozdziały (about.js).
 
 Do zrobienia: kostka do kręcenia (11,84 s), gitara, osiągnięcia, bio Witka.

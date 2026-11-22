@@ -224,7 +224,7 @@ async function init() {
   const floor = createFloor({ y: FLOOR_Y, base: BASE, pool: { x: 1.0, z: -3 } });
   robot.stage.add(floor.points);
   // About as a ride around a brain-planet (not with reduced motion: there the plain chapters).
-  const journey = reduceMotion ? null : createJourney({ small: isSmall(), audio, root: aboutEl });
+  const journey = reduceMotion ? null : createJourney({ small: isSmall(), audio, root: aboutEl, onFinish: () => closeAbout('#p-ike') });
   if (journey) scene.add(journey.group);
   const veil = aboutEl.querySelector('.j-veil');
   const J_CUT = 0.42;            // About tween: before this the camera dives into the face, after it the ride
@@ -355,12 +355,17 @@ async function init() {
 
   /* ---- About ---- */
   let aboutTarget = 0, aboutT = 0, aboutFrom = 1, lastFocus = null, aboutShown = 0;
+  // How the ride is entered and left: 'face' dives through the face (from the hero), 'robot'
+  // goes down past the robot arm into its floor (from the projects, and back out to them).
+  let portal = 'face', exitTo = null;
   const closeBtn = $('#about-close');
   const about = (aboutCtl = createAbout({ audio }));
   function openAbout() {
     if (aboutTarget === 1) return;
     lastFocus = document.activeElement;
     aboutFrom = Math.round(fDisp);
+    portal = journey && fDisp > 1.5 && fDisp < LAST - 0.6 ? 'robot' : 'face';
+    exitTo = null;
     aboutEl.hidden = false;
     if (journey) { aboutEl.classList.add('is-journey'); journey.enter(); } else about.open();
     aboutShown = 0;
@@ -372,9 +377,12 @@ async function init() {
     syncScroll();
     setTimeout(() => closeBtn.focus({ preventScroll: true }), reduceMotion ? 0 : 500);
   }
-  function closeAbout() {
+  /** to: an in-page target (a project) to come out at; the page jumps there while the screen is black. */
+  function closeAbout(to = null) {
     if (aboutTarget === 0) return;
     aboutTarget = 0;
+    exitTo = journey && to ? to : null;
+    if (exitTo) portal = 'robot';
     if (journey) journey.exit(); else about.close();
     audio.whoosh(false);
     aboutEl.classList.remove('is-open');
@@ -408,7 +416,7 @@ async function init() {
       journey.push((touchY - y) * 2.5, e.timeStamp);
       touchY = y;
     }, { passive: true });
-    aboutEl.addEventListener('pointerdown', (e) => { if (riding() && !e.target.closest('button, a')) journey.tap(e.timeStamp); });
+    aboutEl.addEventListener('pointerdown', (e) => { if (riding() && !e.target.closest('button, a, .j-inv')) journey.tap(e.timeStamp); });
   }
 
   /* ---- Inspect: click the presented card, the arm holds it out and the camera moves in ---- */
@@ -528,7 +536,16 @@ async function init() {
     const a = e.target.closest('a[href^="#"]');
     if (!a || a.hasAttribute('data-open-about') || a.classList.contains('skip')) return;
     if (!introDone) { e.preventDefault(); pendingHash = a.getAttribute('href'); hurry(); return; }
-    if (aboutTarget === 1) closeAbout();   // a link in the nav while inside the head: step out, then go
+    if (aboutTarget === 1) {   // a link in the nav while inside the head: step out, then go
+      const href = a.getAttribute('href');
+      if (journey && (href === '#projects' || href.startsWith('#p-'))) {   // out through the robot, straight onto the project
+        e.preventDefault();
+        closeAbout(href === '#projects' ? '#p-ike' : href);
+        history.replaceState(null, '', href);
+        return;
+      }
+      closeAbout();
+    }
     if (lenis && e.detail > 0) { e.preventDefault(); glideTo(a.getAttribute('href')); history.replaceState(null, '', a.getAttribute('href')); }
   }, true);
   // Keyboard scrolling stays native; if a wheel glide is still running, end it where it is
@@ -538,7 +555,7 @@ async function init() {
   }, true);
   function syncScroll() {
     if (!lenis) return;
-    if (introDone && aboutTarget === 0) lenis.start(); else lenis.stop();
+    if (introDone && aboutTarget === 0 && !exitTo) lenis.start(); else lenis.stop();
   }
   function endIntro() {
     introDone = true;
@@ -548,7 +565,20 @@ async function init() {
   }
 
   let warmShown = -1, coolShown = -1;
-  const faceTmp = new THREE.Vector3();
+  const faceTmp = new THREE.Vector3(), lookTmp = new THREE.Vector3(), lookFrom = new THREE.Vector3();
+  /** Leaving the ride for a project: while the screen is black, the page is already there. */
+  function landAt(hash) {
+    exitTo = null;
+    const i = scenes.indexOf(document.querySelector(hash));
+    if (i > 0) {
+      measure();
+      if (lenis) lenis.scrollTo(centers[i], { immediate: true, force: true }); else scrollTo(0, centers[i]);
+      const sNow = storyPosition(scrollY);
+      fDisp = 1 + Math.floor(sNow) + smoothstep(0.2, 0.8, sNow - Math.floor(sNow));
+      pDisp = sNow - 1;
+    }
+    syncScroll();
+  }
   function frame() {
     const now = performance.now() / 1000;
     lenis?.raf(now * 1000);
@@ -562,6 +592,8 @@ async function init() {
     const write = still ? 1 : easeInOutSine(clamp01((it - T_DELAY) / T_WRITE));
     const intro = still ? 1 : easeInOut(clamp01((it - T_DELAY - T_WRITE - T_HOLD) / T_MORPH));
     if (!introDone && (intro >= 1 || it >= INTRO_END)) endIntro();
+
+    if (exitTo && aboutTarget === 0 && aboutT <= J_CUT + 0.03) landAt(exitTo);
 
     // Scroll: one scene per screen; formations hold, then morph between scenes.
     const s = forceScene ?? storyPosition(scrollY);
@@ -581,9 +613,13 @@ async function init() {
     // The ride: dive (aboutT < J_CUT), a black frame at the cut, then the brain-planet.
     const jOn = !!journey && aboutT > 0;
     const inside = jOn && aboutT >= J_CUT;
+    const viaRobot = jOn && portal === 'robot';
+    const aFx = viaRobot ? 0 : a;   // through the robot the page stays as it is; through the face it gives way
+    // Through the robot the project copy and cards stay up until the cut.
+    if (journey && aboutT > 0) document.body.classList.toggle('is-about', !viaRobot || inside);
     if (journey) {
       journey.group.visible = inside;
-      veil.style.opacity = jOn ? String(clamp01(1 - Math.abs(aboutT - J_CUT) / 0.09)) : '0';
+      veil.style.opacity = jOn ? String(clamp01((0.11 - Math.abs(aboutT - J_CUT)) / 0.07)) : '0';
       if (jOn) journey.update(dt, t, inside ? (aboutT - J_CUT) / (1 - J_CUT) : 0);
     }
     points.visible = !inside;
@@ -606,13 +642,13 @@ async function init() {
     // Done writing: the arm folds into a calm pose to the right, away from the signature.
     const rest = easeInOut(clamp01((writeTime - penPlan.duration - 0.25) / 1.6));
 
-    if (jOn) {
+    if (jOn && !viaRobot) {
       setPair(aboutFrom, 1);   // whatever was on screen becomes the face you dive into
       uniforms.uMix.value = aboutFrom === 1 ? 0 : smoothstep(0, 0.7, aboutT / J_CUT);
       uniforms.uWrite.value = 1;
       uniforms.uWriteTo.value = 1;
       uniforms.uFlight.value = 0.2;
-    } else if (aboutT > 0) {
+    } else if (aboutT > 0 && !journey) {
       const ch = about.chapter();
       aboutShown += (ch - aboutShown) * Math.min(1, dt * 5);
       const ci = Math.min(4, Math.floor(aboutShown)), cf = smoothstep(0.2, 0.8, aboutShown - ci);
@@ -635,8 +671,8 @@ async function init() {
     faceHover = aboutT === 0 && intro >= 1 && Math.abs(fDisp - 1) < 0.03 && onFace();
     document.body.classList.toggle('is-face-hover', faceHover);
     let tx = 0, ty = 0;
-    if (jOn) { ty = 0; tx = 0; }
-    else if (aboutT > 0) { ty = Math.sin(t * 0.3) * 0.3 + (pointerSeen && !reduceMotion ? ndc.x * 0.4 : 0); tx = 0.12 - (pointerSeen && !reduceMotion ? ndc.y * 0.15 : 0); }
+    if (jOn && !viaRobot) { ty = 0; tx = 0; }
+    else if (aboutT > 0 && !journey) { ty = Math.sin(t * 0.3) * 0.3 + (pointerSeen && !reduceMotion ? ndc.x * 0.4 : 0); tx = 0.12 - (pointerSeen && !reduceMotion ? ndc.y * 0.15 : 0); }
     else if (fDisp < 1.5) {
       // The head turns toward the cursor anywhere on the first screen, not only over the face
       // (clicking still needs the face). tanh: quick to react near the head, eases out toward the edges.
@@ -648,12 +684,12 @@ async function init() {
     points.rotation.set(rotX, rotY, 0);
 
     // Projects: the particle shape steps back and dims, it becomes the backdrop.
-    const bg = smoothstep(1.0, 1.7, fDisp) * (1 - smoothstep(LAST - 0.7, LAST, fDisp)) * (1 - a);
+    const bg = smoothstep(1.0, 1.7, fDisp) * (1 - smoothstep(LAST - 0.7, LAST, fDisp)) * (1 - aFx);
     const lerp = THREE.MathUtils.lerp;
     points.position.set(lerp(base.x, base.bgX, bg), lerp(base.y, base.bgY, bg), -BG_DEPTH * bg);
     points.scale.setScalar(lerp(scale, base.bgScale, bg));
     uniforms.uAlphaMul.value = 1 - 0.62 * bg;
-    const ca = smoothstep(LAST - 0.7, LAST, fDisp) * (1 - a);   // Contact: where the robot signs
+    const ca = smoothstep(LAST - 0.7, LAST, fDisp) * (1 - aFx);   // Contact: where the robot signs
     if (ca > 0) {
       points.position.set(lerp(points.position.x, base.contactX, ca), lerp(points.position.y, base.contactY, ca), points.position.z);
       points.scale.setScalar(lerp(points.scale.x, base.contactScale, ca));
@@ -663,7 +699,7 @@ async function init() {
     const p = pNow;
     if (reduceMotion) pDisp = Math.round(p);
     else pDisp += (p - pDisp) * Math.min(1, dt * 6);
-    const vis = smoothstep(-0.95, -0.45, pDisp) * (1 - a);
+    const vis = smoothstep(-0.95, -0.45, pDisp) * (1 - aFx);
     robot.stage.visible = vis > 0.001 && !inside;
     cssRenderer.domElement.style.visibility = robot.stage.visible ? 'visible' : 'hidden';
     if (robot.stage.visible) {
@@ -701,7 +737,7 @@ async function init() {
     document.body.classList.toggle('is-card-hover', cardHover);
 
     // Camera: fly into the head when About opens; move in on the card when inspecting.
-    const bump = reduceMotion ? 0 : Math.sin(Math.PI * a);
+    const bump = reduceMotion ? 0 : Math.sin(Math.PI * aFx);
     let camX = 0, camY = 0, camZ = CAM_Z - 2.6 * bump;
     if (ie > 0 && inspectK >= 0) {
       const c = robot.cardCenterWorld(inspectK);
@@ -723,7 +759,18 @@ async function init() {
       camZ = lerp(camZ, c.z + dist, ie);
     }
     if (inside) journey.camera(camera, (aboutT - J_CUT) / (1 - J_CUT), t);
-    else if (jOn) {
+    else if (viaRobot) {
+      // Down past the robot arm, into the floor of its hall: below it is the brain-planet.
+      const kd = Math.pow(aboutT / J_CUT, 1.8);
+      robot.stage.updateMatrixWorld();
+      const dst = robot.stage.localToWorld(faceTmp.set(BASE.x - 0.5, FLOOR_Y + 0.3, BASE.z + 1.2));
+      const look = robot.stage.localToWorld(lookTmp.set(BASE.x - 0.5, FLOOR_Y, BASE.z - 0.4));
+      camera.position.set(lerp(camX, dst.x, kd), lerp(camY, dst.y, kd), lerp(camZ, dst.z, kd));
+      camera.up.set(0, 1, 0);
+      camera.lookAt(lookFrom.set(camX, camY, camZ - 10).lerp(look, kd));
+      camera.fov = FOV + 30 * kd;
+      camera.updateProjectionMatrix();
+    } else if (jOn) {
       // Dive: straight into the face and through it.
       const kd = Math.pow(aboutT / J_CUT, 2.2);
       points.updateMatrixWorld();
@@ -743,14 +790,14 @@ async function init() {
     const descent = easeInOut(smoothstep(-0.95, -0.45, pDisp));
     ray.setFromCamera(ndc, camera);
     dust.update({
-      t, warm: smoothstep(-0.6, 0.2, pDisp) * (1 - contactAmt) * (1 - a),
+      t, warm: smoothstep(-0.6, 0.2, pDisp) * (1 - contactAmt) * (1 - aFx),
       lift: descent * base.stageDrop * robot.stage.scale.y + Math.max(0, pDisp) * 0.25,
       alpha: (1 - 0.7 * ie) * (1 - 0.35 * contactAmt),
       ray: pointerSeen && !isTouch ? ray.ray : null,
     });
     if (robot.stage.visible) floor.update({ t, gripper: mo });
     // Light: cool in the hero, a warm glow on the floor in the robot's hall, darker at the signature.
-    const warm = Math.round(descent * (1 - contactAmt * 0.6) * (1 - a) * 100) / 100;
+    const warm = Math.round(descent * (1 - contactAmt * 0.6) * (1 - aFx) * 100) / 100;
     const cool = Math.round((1 - 0.25 * descent - 0.3 * contactAmt) * 100) / 100;
     if (warm !== warmShown || cool !== coolShown) {
       warmShown = warm; coolShown = cool;

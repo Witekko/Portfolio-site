@@ -30,16 +30,33 @@ const STOPS = [
   { s: 21, side: 2.6, make: F.railWagon },
   { s: 30.5, side: 2.4, make: F.neuralLoading },
 ];
-const S_END = 35.4;           // the robot parks here
-const PIT = { s: S_END + 1.7, side: 0, make: F.rubiksCube };   // the cube waits at the end of the line
+const PIT = { s: 35.2, side: 2.2, make: F.rubiksCube };   // off hours: the cube by the line
 const ML_FROM = 26.5, ML_TO = 33.2;   // the dashed stretch: still being built
+const GATE_AT = 1.6;          // a gantry with the stop's name stands this far before it; you drive under it
+const START_GATE = 0.9;       // the line is a closed lap: start and finish are the same gantry
+// Skills on the line, grouped by the stop they belong to. `info` is what the inventory shows on hover.
+const W1 = '01 · robotics', W2 = '02 · thesis', W3 = '03 · rail data', WP = 'side project · IKE Tracker';
 const TOKENS = [
-  ['C++', 'C++', 2.6], ['C#', 'C#', 3.6], ['Arduino & STM32', 'STM', 4.6], ['ABB & FANUC robots', 'ABB', 5.6],
-  ['Statistics', 'STAT', 9.6], ['Survey research', 'SURV', 10.6], ['Python', 'PY', 11.6], ['Pandas', 'PD', 12.6],
-  ['SQL', 'SQL', 16.6], ['Power BI (DAX)', 'DAX', 17.6], ['Power Platform', 'PP', 18.6], ['ERP & MES', 'ERP', 19.6],
-  ['Django', 'DJ', 22.6], ['NumPy', 'NP', 23.3], ['JavaScript', 'JS', 24], ['Chart.js', 'CHT', 24.7], ['Git & GitHub', 'GIT', 25.4], ['Docker', 'DKR', 26.1],
-  ['next level', '?', 28.4, true], ['next level', '?', 29.2, true], ['next level', '?', 31.4, true],
-].map(([name, short, s, locked = false]) => ({ name, short, s, locked }));
+  ['C++', 'C++', 2.6, W1, 'My B.Eng. game: Qt bent into a game engine, played with a gyroscope.'],
+  ['C#', 'C#', 3.6, W1, 'Learned from zero in Unity for my remake of Age of War.'],
+  ['Arduino & STM32', 'STM', 4.6, W1, 'Microcontrollers for sensors and motors, like the line follower that started all this.'],
+  ['ABB & FANUC robots', 'ABB', 5.6, W1, 'Programming industrial robot arms in the Automation & Robotics labs.'],
+  ['Statistics', 'STAT', 9.6, W2, 'Spearman rank correlations with Benjamini–Hochberg correction, in my master’s thesis.'],
+  ['Survey research', 'SURV', 10.6, W2, 'A survey of 50 viewers of G2 content, tied to seven composite indices.'],
+  ['Python', 'PY', 11.6, W2, 'My main language for data: analysis, scripts and the IKE Tracker backend.'],
+  ['Pandas', 'PD', 12.6, W2, 'Cleaning and joining data, from survey answers to broker exports.'],
+  ['SQL', 'SQL', 16.6, W3, 'Getting production and work-order data out of the systems it lives in.'],
+  ['Power BI (DAX)', 'DAX', 17.6, W3, 'Dashboards and DAX measures that turn that data into something people read.'],
+  ['Power Platform', 'PP', 18.6, W3, 'Apps and flows that automate business processes at work.'],
+  ['ERP & MES', 'ERP', 19.6, W3, 'Integrating, maintaining and improving the tools around production.'],
+  ['Django', 'DJ', 22.6, WP, 'The full-stack framework behind IKE Tracker, my investment app.'],
+  ['NumPy', 'NP', 23.3, WP, 'The number crunching under returns and allocations.'],
+  ['JavaScript', 'JS', 24, WP, 'Front ends: the IKE Tracker dashboard and this site in Three.js.'],
+  ['Chart.js', 'CHT', 24.7, WP, 'TWR/MWR performance and asset-allocation charts.'],
+  ['Git & GitHub', 'GIT', 25.4, WP, 'Version control for every project; this site deploys from GitHub.'],
+  ['Docker', 'DKR', 26.1, WP, 'Containers to run and ship the apps.'],
+  ['next level', '?', 28.4, '', '', true], ['next level', '?', 29.2, '', '', true], ['next level', '?', 31.4, '', '', true],
+].map(([name, short, s, where, info, locked = false]) => ({ name, short, s, where, info, locked }));
 
 const R = Math.random;
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
@@ -151,22 +168,23 @@ function buildStars(n) {
 
 /* ----------------------------------------------------------------- path -- */
 
-// The route: once around the brain, wavering left and right.
+// The route: one closed lap around the brain, wavering left and right. s wraps around,
+// so driving past the end comes back over the start (the finish line).
 function buildPath() {
   const E3 = new THREE.Vector3(0.18, 0.25, 0.95).normalize();
   const E1 = new THREE.Vector3(1, 0, 0).sub(E3.clone().multiplyScalar(E3.x)).normalize();
   const E2 = new THREE.Vector3().crossVectors(E3, E1);
-  const M = 5000, U = Math.PI * 2 * 0.985;
+  const M = 5000, U = Math.PI * 2;
   const pts = [], len = [0];
   for (let k = 0; k <= M; k++) {
     const u = (k / M) * U;
-    const w = 0.16 * Math.sin(2.3 * u) + 0.07 * Math.sin(5.1 * u + 1);
+    const w = 0.16 * Math.sin(2 * u) + 0.07 * Math.sin(5 * u + 1);
     pts.push(E1.clone().multiplyScalar(Math.cos(u)).addScaledVector(E2, Math.sin(u)).addScaledVector(E3, w).normalize().multiplyScalar(RP));
     if (k) len.push(len[k - 1] + pts[k].distanceTo(pts[k - 1]));
   }
   const total = len[M];
   const idx = (s) => {
-    s = Math.min(Math.max(s, 0), total);
+    s = ((s % total) + total) % total;
     let lo = 0, hi = M;
     while (hi - lo > 1) { const m = (lo + hi) >> 1; if (len[m] < s) lo = m; else hi = m; }
     return [lo, (s - len[lo]) / (len[hi] - len[lo] || 1)];
@@ -216,12 +234,12 @@ const LINE_FS = /* glsl */`
 
 function buildLine(path) {
   const step = 0.04, W = 0.11;
-  const n = Math.floor(Math.min(path.total, PIT.s + 0.3) / step) + 1;
+  const n = Math.ceil(path.total / step) + 1;   // the whole lap, the last point closes it
   const pos = new Float32Array(n * 2 * 3), aS = new Float32Array(n * 2), aSide = new Float32Array(n * 2);
   const index = [];
   const f = { p: new THREE.Vector3(), up: new THREE.Vector3(), fwd: new THREE.Vector3(), right: new THREE.Vector3() };
   for (let i = 0; i < n; i++) {
-    const s = i * step;
+    const s = Math.min(i * step, path.total);
     path.frame(s, f);
     const c = f.p.clone().multiplyScalar((RP + LIFT) / RP);
     for (let k = 0; k < 2; k++) {
@@ -300,6 +318,110 @@ function placeOnPath(path, obj, s, side, height = 0) {
   obj.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, up, face));
 }
 
+/* -------------------------------------------------------------- gantries -- */
+
+// A sign over the line, like a gantry on a race track: the stop's name, readable from far
+// away, and you drive under it. Drawn on a canvas (redrawn when its text changes).
+const GH = 0.4, GY = 0.86;   // panel height, clearance (the camera rides under it)
+
+/** GW: width (narrower on phones, where the view is tall and narrow). */
+function buildGantry(GW = 1.7) {
+  const g = new THREE.Group();
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024; canvas.height = Math.round(1024 * GH / GW);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  const face = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+  const back = new THREE.MeshBasicMaterial({ color: 0x0a1228, transparent: true, depthWrite: false });
+  const frame = new THREE.MeshStandardMaterial({ color: 0x1d2c55, metalness: 0.6, roughness: 0.4, transparent: true });
+  const hot = new THREE.MeshStandardMaterial({ color: 0xff8a3d, emissive: 0xff5a10, emissiveIntensity: 1.4, transparent: true });
+  const panel = new THREE.Mesh(new THREE.PlaneGeometry(GW, GH), face);
+  panel.position.y = GY + GH / 2;
+  panel.renderOrder = 3;
+  const rear = new THREE.Mesh(new THREE.PlaneGeometry(GW, GH), back);
+  rear.position.set(0, GY + GH / 2, -0.005);
+  rear.rotation.y = Math.PI;
+  g.add(panel, rear);
+  const postGeo = new THREE.BoxGeometry(0.045, GY + GH + 0.04, 0.045), capGeo = new THREE.BoxGeometry(0.07, 0.025, 0.07);
+  for (const sx of [-1, 1]) {
+    const post = new THREE.Mesh(postGeo, frame);
+    post.position.set(sx * (GW / 2 + 0.03), (GY + GH + 0.04) / 2, 0);
+    const cap = new THREE.Mesh(capGeo, hot);
+    cap.position.set(sx * (GW / 2 + 0.03), GY + GH + 0.05, 0);
+    g.add(post, cap);
+  }
+  const mats = [face, back, frame, hot];
+  let drawn = '';
+  return {
+    g,
+    setOpacity(a) { mats.forEach((m) => { m.opacity = a; }); g.visible = a > 0.01; },
+    /** spec: { kicker, title, tone: 'hot' | 'cool' | 'check', progress } */
+    draw(spec) {
+      const key = JSON.stringify(spec);
+      if (key === drawn) return;
+      drawn = key;
+      drawGantry(canvas, spec);
+      tex.needsUpdate = true;
+    },
+  };
+}
+
+function drawGantry(canvas, { kicker = '', title = '', tone = 'hot', progress = null }) {
+  const c = canvas.getContext('2d'), W = canvas.width, H = canvas.height, u = H / 241;   // laid out for 1024 × 241
+  const css = getComputedStyle(document.documentElement);
+  const sans = css.getPropertyValue('--sans').trim() || 'system-ui, sans-serif';
+  const mono = css.getPropertyValue('--mono').trim() || 'monospace';
+  const accent = tone === 'cool' ? '#8ea6d8' : '#ff8a3d';
+  c.clearRect(0, 0, W, H);
+  const r = 26, b = 6;
+  c.beginPath();
+  c.roundRect(b, b, W - 2 * b, H - 2 * b, r);
+  c.fillStyle = 'rgba(6, 12, 30, 0.92)';
+  c.fill();
+  c.lineWidth = b;
+  c.strokeStyle = accent;
+  if (tone === 'cool') c.setLineDash([26, 16]);
+  c.stroke();
+  c.setLineDash([]);
+  let x0 = 48;
+  if (tone === 'check') {   // a chequered flag strip on both ends
+    const q = 20;
+    c.save();
+    c.clip();
+    for (const sx of [0, W - 4 * q]) {
+      for (let i = 0; i < 4; i++) for (let j = 0; j * q < H; j++) {
+        c.fillStyle = (i + j) % 2 ? '#e8f0ff' : '#0a1228';
+        c.fillRect(sx + i * q, j * q, q, q);
+      }
+    }
+    c.restore();
+    x0 = 4 * q + 40;
+  }
+  const maxW = W - x0 - (tone === 'check' ? 4 * 20 + 40 : 48);
+  c.textBaseline = 'alphabetic';
+  c.fillStyle = accent;
+  c.font = `500 ${34 * u}px ${mono}`;
+  c.fillText(kicker.toUpperCase(), x0, H / 2 - 48 * u);
+  let size = 82 * u;
+  c.font = `600 ${size}px ${sans}`;
+  while (c.measureText(title).width > maxW && size > 40) { size -= 2; c.font = `600 ${size}px ${sans}`; }
+  c.fillStyle = '#eef3ff';
+  c.fillText(title, x0, H / 2 + (progress === null ? 48 : 32) * u);
+  if (progress !== null) {   // a loading bar: still being built
+    const y = H / 2 + 64 * u, bw = maxW, bh = 14 * u;
+    c.fillStyle = 'rgba(142, 166, 216, 0.22)';
+    c.beginPath(); c.roundRect(x0, y, bw, bh, 7); c.fill();
+    c.fillStyle = accent;
+    c.beginPath(); c.roundRect(x0, y, bw * progress, bh, 7); c.fill();
+    c.font = `500 ${34 * u}px ${mono}`;
+    c.fillStyle = '#b8c6e4';
+    c.textAlign = 'right';
+    c.fillText(`LOADING ${Math.round(progress * 100)}%`, x0 + bw, H / 2 - 48 * u);
+    c.textAlign = 'left';
+  }
+}
+
 /* ---------------------------------------------------------------- robot -- */
 
 function buildRobot() {
@@ -355,7 +477,7 @@ function blockedByPlanet(a, b) {
 
 /* ----------------------------------------------------------------- main -- */
 
-export function createJourney({ small = false, audio = null, root }) {
+export function createJourney({ small = false, audio = null, root, onFinish = null }) {
   const group = new THREE.Group();
   group.visible = false;
   const planet = new THREE.Group();
@@ -385,6 +507,32 @@ export function createJourney({ small = false, audio = null, root }) {
     return { ...st, uniforms };
   });
 
+  // The lap: the start gantry is also the finish; crossing it again ends the ride.
+  const L = path.total;
+  const S_FIN = L + START_GATE;
+  const S_END = S_FIN + 2.5;
+  const stEls = [...root.querySelectorAll('.station')];
+  const stopSpec = (i) => {
+    const el = stEls[i], n = el.querySelector('.station-n');
+    const num = n.querySelector('b')?.textContent.trim() ?? String(i + 1).padStart(2, '0');
+    const when = n.textContent.replace(num, '').replace(/\s+/g, ' ').trim();
+    const ml = el.classList.contains('next');
+    return { kicker: `${num} · ${when}`, title: el.querySelector('h3').textContent.trim(), tone: ml ? 'cool' : 'hot', progress: ml ? 0.37 : null };
+  };
+  const START_SPEC = { kicker: 'about me · lap 1', title: 'Start', tone: 'check' };
+  const FINISH_SPEC = { kicker: 'finish · next up', title: 'Projects →', tone: 'check' };
+  const gates = [
+    { s: START_GATE, start: true },
+    ...STOPS.map((stop, i) => ({ s: stop.s - GATE_AT, spec: () => stopSpec(i) })),
+    { s: PIT.s - GATE_AT, spec: () => ({ kicker: 'pit stop', title: 'Off hours', tone: 'hot' }) },
+  ].map((gt) => {
+    const gantry = buildGantry(small ? 1.12 : 1.7);
+    placeOnPath(path, gantry.g, gt.s, 0);
+    planet.add(gantry.g);
+    return { ...gt, gantry };
+  });
+  const drawGates = () => gates.forEach((gt) => gt.gantry.draw(gt.start ? (s > 20 ? FINISH_SPEC : START_SPEC) : gt.spec()));
+
   // Tokens: hexagonal coins on the line.
   const coinGeo = new THREE.CylinderGeometry(0.075, 0.075, 0.022, 6);
   const tokens = TOKENS.map((tk) => {
@@ -412,11 +560,45 @@ export function createJourney({ small = false, audio = null, root }) {
   const card = $h('.j-card'), cardKicker = $h('.j-kicker'), cardTitle = $h('.j-card h3'), cardText = $h('.j-text');
   const labels = $h('.j-labels'), slots = $h('.j-slots'), count = $h('.j-count'), hint = $h('.j-hint'), toast = $h('.j-toast');
   const total = tokens.filter((t) => !t.locked).length;
+  // Hover (or tap, or focus) a slot in the inventory: what the skill is and where it comes from.
+  const inv = $h('.j-inv');
+  const pop = document.createElement('div');
+  pop.className = 'j-pop';
+  pop.id = 'j-pop';
+  pop.setAttribute('role', 'tooltip');
+  pop.hidden = true;
+  inv.appendChild(pop);
+  let popFor = null;
+  const showPop = (t) => {
+    popFor = t;
+    const [title, where, text] = t.locked
+      ? ['Locked', 'next level', 'Machine learning: models that learn from the kind of data I already work with. Still being built.']
+      : t.got ? [t.name, t.where, t.info] : ['???', t.where, 'Still out on the line. Drive over it to collect it.'];
+    pop.replaceChildren();
+    const b = document.createElement('b'); b.textContent = title;
+    const w = document.createElement('span'); w.className = 'mono'; w.textContent = where;
+    const p = document.createElement('p'); p.textContent = text;
+    pop.append(b, w, p);
+    pop.classList.toggle('is-locked', t.locked || !t.got);
+    pop.hidden = false;
+    const r = t.slot.getBoundingClientRect(), ir = inv.getBoundingClientRect();
+    const pw = pop.offsetWidth;
+    const cx = Math.max(12 + pw / 2, Math.min(innerWidth - 12 - pw / 2, r.left + r.width / 2));
+    pop.style.left = `${cx - ir.left}px`;
+  };
+  const hidePop = () => { pop.hidden = true; popFor = null; };
   tokens.forEach((t) => {
     const li = document.createElement('li');
     li.className = t.locked ? 'locked' : '';
     li.textContent = t.locked ? '?' : '';
-    li.title = t.locked ? 'next level: machine learning' : t.name;
+    li.tabIndex = 0;
+    li.setAttribute('aria-label', t.locked ? 'Locked skill' : t.name);
+    li.setAttribute('aria-describedby', 'j-pop');
+    li.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') showPop(t); });
+    li.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') hidePop(); });
+    li.addEventListener('focus', () => showPop(t));
+    li.addEventListener('blur', hidePop);
+    li.addEventListener('click', () => (popFor === t && !matchMedia('(hover: hover)').matches ? hidePop() : showPop(t)));
     slots.appendChild(li);
     t.slot = li;
     const lab = document.createElement('span');
@@ -426,16 +608,20 @@ export function createJourney({ small = false, audio = null, root }) {
     t.label = lab;
   });
   // Card texts come from the static About (the version without WebGL), so there is one source.
-  const st = [...root.querySelectorAll('.station')];
+  const st = stEls;
   const cards = [
     { from: -1, to: 1.4, kicker: 'about me', title: root.querySelector('#about-title').textContent, text: root.querySelector('.about-hello .lead').textContent },
     ...STOPS.map((stop, i) => ({ from: stop.s - 4.2, to: stop.s + 2.2, kicker: st[i].querySelector('.station-n').textContent.replace(/\s+/g, ' ').trim(), title: st[i].querySelector('h3').textContent, text: st[i].querySelector('p:not(.station-n):not(.loading)').textContent })),
-    { from: S_END - 3, to: 99, kicker: 'pit stop · off hours', title: 'Cubes, strings, engines', text: '' },
+    { from: PIT.s - 2.5, to: L - 0.6, pit: true, kicker: 'pit stop · off hours', title: 'Cubes, strings, engines', text: '' },
+    { from: L - 0.6, to: 999, finish: true, kicker: 'finish', title: 'Lap complete', text: 'Drive under the finish line: the camera comes up out of my head and over to the projects.' },
   ];
+  // Between the rail-data stop and the ML stretch: the evenings, where most of these skills came from.
+  cards.splice(4, 0, { from: STOPS[2].s + 2.2, to: STOPS[3].s - 4.2, kicker: 'side project · evenings', title: 'IKE Tracker', text: 'A full-stack app for my own investments: Django, Pandas and Chart.js. The project I open every day, and the first one in Projects.' });
   let cardShown = -2;
 
   /* ---- state ---- */
   let s = 0, v = 0, phase = 'off', lightsAt = 0, outAt = 0, holdFor = 0, reaction = null, jumped = false;
+  let leaving = false, finishedAt = 0, finishSent = false;
   let best = Number(localStorage.getItem('wk-f1-best')) || 0;
   let toastUntil = 0, lean = 0;
   const keys = new Set();
@@ -478,9 +664,11 @@ export function createJourney({ small = false, audio = null, root }) {
       if (cardShown !== i) return;
       cardKicker.textContent = c.kicker;
       cardTitle.textContent = c.title;
-      if (i === cards.length - 1) {
-        const got = tokens.filter((t) => t.got).length;
+      const got = tokens.filter((t) => t.got).length;
+      if (c.pit) {
         cardText.innerHTML = `Speedcubing (11.84 s single), guitar, Formula 1 and games. ${reaction ? `Your start today: <b>${reaction} ms</b>${best ? ` · best <b>${best} ms</b>` : ''}.` : ''} Skills collected: <b>${got}/${total}</b>. Next here: a cube you can turn and a guitar you can play.`;
+      } else if (c.finish) {
+        cardText.innerHTML = `${c.text} Skills on board: <b>${got}/${total}</b>.`;
       } else cardText.textContent = c.text;
       card.classList.add('is-in');
     }, 220);
@@ -489,7 +677,9 @@ export function createJourney({ small = false, audio = null, root }) {
   return {
     group,
     get speed01() { return Math.abs(v) / VMAX; },
-    get progress() { return s / S_END; },
+    get progress() { return s / S_FIN; },
+    /** Length of the lap (the finish line is just past it). */
+    get lap() { return L; },
     /** Debug: jump along the line. */
     goto(x) { s = Math.max(0, Math.min(S_END, x)); },
     get phase() { return phase; },
@@ -502,7 +692,11 @@ export function createJourney({ small = false, audio = null, root }) {
     },
     /** Called when the About opens. The ride resumes where it was; the lights run on every entry. */
     enter() {
+      if (phase === 'finished' || s >= S_FIN) s = 0;   // a finished lap: back to the start (the skills stay collected)
       phase = 'arriving';
+      leaving = false;
+      finishSent = false;
+      drawGates();   // here, not at load: the web fonts are in by now
       v = 0;
       jumped = false;
       reaction = null;
@@ -513,9 +707,12 @@ export function createJourney({ small = false, audio = null, root }) {
       cardShown = -2;
     },
     exit() {
-      phase = 'off';
-      v = 0;
+      leaving = true;
+      if (phase !== 'finished') { phase = 'off'; v = 0; }   // over the finish line the robot rolls on while the camera rises
       keys.clear();
+      hidePop();
+      lightsEl.classList.remove('is-on');
+      toast.hidden = true;
       hud.classList.remove('is-in');
       card.classList.remove('is-in');
       labels.querySelectorAll('span').forEach((l) => { l.style.opacity = '0'; });
@@ -576,7 +773,17 @@ export function createJourney({ small = false, audio = null, root }) {
         if (Math.abs(v) < 0.01) v = 0;
         s += v * dt;
         if (s < 0) { s = 0; v = 0; }
-        if (s > S_END) { s = S_END; v = 0; }
+        if (s >= S_FIN + 0.25) {   // under the finish gantry: the lap is done
+          phase = 'finished';
+          finishedAt = now;
+          audio?.finish();
+          showToast('lap complete', 1600);
+        }
+      }
+      if (phase === 'finished') {   // roll on through the finish, then up and out to the projects
+        v = Math.max(v, 1.4);
+        s = Math.min(S_END + 4, s + v * dt);
+        if (!finishSent && now - finishedAt > 700) { finishSent = true; onFinish?.(); }
       }
       line.uniforms.uS.value = s;
       hint.classList.toggle('is-in', phase === 'go' || (phase === 'drive' && s < 1.5));
@@ -598,12 +805,19 @@ export function createJourney({ small = false, audio = null, root }) {
       // Stations assemble as you come near.
       stations.forEach((x) => { x.uniforms.uK.value = smoothstep(x.s - 9, x.s - 3.5, s); });
 
+      // Gantries rise over the horizon ahead and fade once the camera has passed under them.
+      gates.forEach((gt) => {
+        const ahead = (gt.start && s > 20 ? S_FIN : gt.s) - s;
+        gt.gantry.setOpacity(smoothstep(7.5, 5, ahead) * smoothstep(-2.6, -1.5, ahead));
+      });
+      gates[0].gantry.draw(s > 20 ? FINISH_SPEC : START_SPEC);   // the start gantry turns into the finish
+
       // Tokens: spin, and get collected when the robot rolls over them.
       tokens.forEach((tk) => {
         tk.spin.rotation.y = t * 2 + tk.s;
         if (!tk.got && s >= tk.s - 0.22 && s <= tk.s + 0.5) {
           if (tk.locked) {
-            if (!tk.seen) { tk.seen = true; showToast('locked · machine learning is the next level'); }
+            if (!tk.seen) { tk.seen = true; tk.seenAt = now; showToast('locked · machine learning is the next level'); }
           } else {
             tk.got = true;
             tk.gotAt = now;
@@ -617,6 +831,10 @@ export function createJourney({ small = false, audio = null, root }) {
           tk.spin.scale.setScalar(1 + k * 0.6);
           tk.mat.opacity = 1 - k;
           tk.holder.visible = k < 1;
+        } else if (tk.seen) {   // a locked token stays shut: it sinks back into the brain, out of the camera's way
+          const k = clamp01((now - tk.seenAt) / 450);
+          tk.spin.scale.setScalar(1 - k * k);
+          tk.holder.visible = k < 1;
         }
       });
       count.textContent = String(tokens.filter((x) => x.got).length);
@@ -624,7 +842,7 @@ export function createJourney({ small = false, audio = null, root }) {
       // The card for wherever you are.
       let ci = -1;
       cards.forEach((c, i) => { if (s >= c.from && s < c.to) ci = i; });
-      if (phase === 'arriving' || phase === 'off') ci = -1;
+      if (phase === 'arriving' || phase === 'off' || leaving) ci = -1;
       setCard(ci);
 
       if (!toast.hidden && now > toastUntil) toast.hidden = true;
@@ -647,11 +865,13 @@ export function createJourney({ small = false, audio = null, root }) {
       brain.uniforms.uFogFar.value = 11 + (1 - e) * 40;
 
       // Labels over the tokens ahead, and chips flying into the inventory.
-      const vis = phase !== 'off' && k >= 1;
-      const near = tokens.filter((tk) => !tk.got && tk.s - s > 0.45 && tk.s - s < 4.5).slice(0, 2);
+      // The next token's name stays sharp until you pick it up; the ones after it wait, blurred.
+      const vis = phase !== 'off' && !leaving && k >= 1;
+      const near = vis ? tokens.filter((tk) => !tk.got && !tk.seen && tk.s - s > -0.25 && tk.s - s < 5).slice(0, 3) : [];
       tokens.forEach((tk) => {
         const ahead = tk.s - s;
-        let show = vis && near.includes(tk);
+        const rank = near.indexOf(tk);
+        let show = rank >= 0;
         if (show) {   // hidden behind the curve of the planet?
           tk.holder.getWorldPosition(tmp);
           show = !blockedByPlanet(cam.position, tmp);
@@ -662,7 +882,8 @@ export function createJourney({ small = false, audio = null, root }) {
           tmp.project(cam);
           if (tmp.z < 1) {
             tk.label.style.transform = `translate(${((tmp.x + 1) / 2) * w}px, ${((1 - tmp.y) / 2) * h}px) translate(-50%, -100%)`;
-            tk.label.style.opacity = String(smoothstep(4.5, 3, ahead));
+            tk.label.classList.toggle('is-next', rank === 0);
+            tk.label.style.opacity = String(rank === 0 ? smoothstep(5, 3.5, ahead) : 0.6 * smoothstep(5, 3.2, ahead));
           } else tk.label.style.opacity = '0';
         } else tk.label.style.opacity = '0';
         if (tk.fly) {
@@ -679,7 +900,12 @@ export function createJourney({ small = false, audio = null, root }) {
             chip.style.transform = `translate(${r.left + r.width / 2}px, ${r.top + r.height / 2}px) translate(-50%, -50%) scale(.6)`;
             chip.style.opacity = '0.2';
           }));
-          setTimeout(() => { chip.remove(); tk.slot.textContent = tk.short; tk.slot.classList.add('got'); }, 650);
+          setTimeout(() => {
+            chip.remove();
+            tk.slot.textContent = tk.short;
+            tk.slot.classList.add('got');
+            if (popFor === tk) showPop(tk);
+          }, 650);
         }
       });
     },
