@@ -13,6 +13,9 @@ import * as THREE from 'three';
 import { CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer.js';
 import * as F from './formations.js';
 import { createRobotStage, SIGN_START } from './robot.js';
+import { createAudio } from './audio.js';
+import { createGate } from './gate.js';
+import { initScramble } from './scramble.js';
 
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const isSmall = () => innerWidth <= 860;
@@ -104,6 +107,17 @@ const fragmentShader = /* glsl */`
 /* ----------------------------------------------------------------- init -- */
 
 async function init() {
+  // Entrance + sound first, so the gate shows progress while everything loads.
+  const gate = createGate();
+  const audio = createAudio();
+  const breathe = () => new Promise((r) => setTimeout(r, 30));   // let the gate repaint between heavy steps
+  initScramble({ selector: '.nav nav a, .btn, .about-close, .rail a, .sound-toggle', onStart: () => audio.tick() });
+  const soundToggle = $('#sound-toggle');
+  const syncToggle = () => soundToggle.setAttribute('aria-pressed', String(audio.enabled));
+  soundToggle.addEventListener('click', async () => { await audio.setEnabled(!audio.enabled); syncToggle(); });
+  document.addEventListener('visibilitychange', () => audio.setHidden(document.hidden));
+  gate.setProgress(0.18, 'loading portrait…');
+
   const canvas = $('#gl');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -113,6 +127,8 @@ async function init() {
   camera.position.z = CAM_Z;
 
   const [photo, depth] = await Promise.all([loadImage('./assets/JA.png'), loadImage('./assets/JA-depth.png')]);
+  gate.setProgress(0.5, 'reading depth map…');
+  await breathe();
 
   const sig = F.signature(N);
   const formations = [
@@ -174,6 +190,8 @@ async function init() {
   const cssScene = new THREE.Scene();
   const cssRenderer = new CSS3DRenderer();
   $('#css3d').appendChild(cssRenderer.domElement);
+  gate.setProgress(0.8, 'building robot cell…');
+  await breathe();
   const robot = createRobotStage(projectEls.map((el) => ({
     title: el.querySelector('h2').textContent,
     media: el.dataset.media, poster: el.dataset.poster,
@@ -308,6 +326,7 @@ async function init() {
     aboutEl.hidden = false;
     requestAnimationFrame(() => aboutEl.classList.add('is-open'));
     document.body.classList.add('is-about');
+    audio.whoosh(true);
     document.documentElement.classList.add('is-locked');   // no page scroll under the About panel
     aboutTarget = 1;
     setTimeout(() => closeBtn.focus({ preventScroll: true }), reduceMotion ? 0 : 500);
@@ -315,6 +334,7 @@ async function init() {
   function closeAbout() {
     if (aboutTarget === 0) return;
     aboutTarget = 0;
+    audio.whoosh(false);
     aboutEl.classList.remove('is-open');
     document.body.classList.remove('is-about');
     document.documentElement.classList.remove('is-locked');
@@ -360,12 +380,14 @@ async function init() {
     requestAnimationFrame(() => inspectEl.classList.add('is-open'));
     document.body.classList.add('is-inspect');
     inspectTarget = 1;
+    audio.whoosh(true);
     inspectSpeed = 1.1;
     setTimeout(() => { if (inspectTarget === 1) inspectClose.focus({ preventScroll: true }); }, reduceMotion ? 0 : 600);
   }
   function closeInspect(fast = false) {
     if (inspectTarget === 0) return;
     inspectTarget = 0;
+    audio.whoosh(false);
     inspectSpeed = fast ? 0.45 : 1.1;
     inspectEl.classList.remove('is-open');
     document.body.classList.remove('is-inspect');
@@ -418,16 +440,17 @@ async function init() {
   const freezeT = Number(params.get('t')) || null;          // debug: ?t=3.2 freezes the intro
   const forceScene = params.has('scene') ? Number(params.get('scene')) : null;   // debug: ?scene=3
   const start = performance.now() / 1000;
+  let lastMotion = null, lastPen = { x: 0, y: 0 };
   let last = start, fDisp = 0, pDisp = -1, rotX = 0, rotY = 0, activeScene = -1, hintMode = '';
 
   /* ---- Intro cooldown: the page stays on the first screen until the head is built ----
      Trying to scroll (or clicking an in-page link) speeds the intro up instead; a link
      is followed as soon as the intro ends. */
   const INTRO_END = T_DELAY + T_WRITE + T_HOLD + T_MORPH;
-  let introClock = 0, introSpeed = 1, introDone = reduceMotion, pendingHash = null;
+  let introClock = 0, introSpeed = 1, introDone = reduceMotion, pendingHash = null, entered = false;
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   if (!introDone) { scrollTo(0, 0); document.documentElement.classList.add('is-intro'); }
-  const hurry = () => { if (!introDone) introSpeed = 4; };
+  const hurry = () => { if (!introDone && entered) introSpeed = 4; };   // not while still at the gate
   addEventListener('wheel', hurry, { passive: true });
   addEventListener('touchmove', hurry, { passive: true });
   addEventListener('keydown', (e) => { if (['PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', ' ', 'End', 'Home'].includes(e.key)) hurry(); });
@@ -451,7 +474,7 @@ async function init() {
     const still = reduceMotion && freezeT === null;
 
     // Intro: write the signature, then morph it into the head.
-    if (!introDone) introClock += dt * introSpeed;
+    if (!introDone && entered) introClock += dt * introSpeed;   // the intro starts when you enter
     const it = freezeT ?? introClock;   // intro time (debug ?t= freezes it)
     const write = still ? 1 : easeInOutSine(clamp01((it - T_DELAY) / T_WRITE));
     const intro = still ? 1 : easeInOut(clamp01((it - T_DELAY - T_WRITE - T_HOLD) / T_MORPH));
@@ -549,7 +572,24 @@ async function init() {
     }
 
     // Hovering the presented card shows it can be clicked.
+    const wasCardHover = cardHover;
     cardHover = !isTouch && robot.stage.visible && aboutT === 0 && inspectTarget === 0 && robot.pickHeld(ndc, camera) >= 0;
+    if (cardHover && !wasCardHover) audio.tick();
+
+    // Sound follows the picture: servos from the arm's real motion, the pen from the pen.
+    const mo = robot.motion();
+    let servo = 0;
+    if (robot.stage.visible && lastMotion) {
+      const step = Math.hypot(mo.x - lastMotion.x, mo.y - lastMotion.y, mo.z - lastMotion.z) / Math.max(dt, 1e-3);
+      servo = clamp01(step / 2.2 + Math.abs(mo.yaw - lastMotion.yaw) / Math.max(dt, 1e-3) / 3);
+      if ((mo.grip > 0.5) !== (lastMotion.grip > 0.5)) audio.click();
+    }
+    lastMotion = mo;
+    let scratch = entered && write > 0 && write < 1 ? 0.55 : 0;   // the intro signature
+    if (seqT >= SIGN_START && pen.lift < 0.3) scratch = Math.max(scratch, clamp01(Math.hypot(pen.x - lastPen.x, pen.y - lastPen.y) / Math.max(dt, 1e-3) / 0.9));
+    lastPen = { x: pen.x, y: pen.y };
+    const contactAmt = smoothstep(NP + 0.4, NP + 0.9, s);
+    audio.update({ projects: smoothstep(0.4, 1.0, s) * (1 - contactAmt), about: a, contact: contactAmt, inspect: ie, scratch, servo });
     document.body.classList.toggle('is-card-hover', cardHover);
 
     // Camera: fly into the head when About opens; move in on the card when inspecting.
@@ -599,8 +639,17 @@ async function init() {
     requestAnimationFrame(frame);
   }
   frame();
+  gate.setProgress(1);
+  // Debug views (?debug, ?t=, ?about, ?scene) skip the gate, silently.
+  if (['debug', 't', 'about', 'scene'].some((k) => params.has(k))) { gate.skip(); entered = true; }
+  else gate.entered.then(async ({ sound }) => {
+    if (sound) await audio.setEnabled(true);
+    syncToggle();
+    entered = true;
+    gate.leave(reduceMotion);
+  });
   if (new URLSearchParams(location.search).has("about")) openAbout();   // debug: ?about=1
-  if (params.has('debug')) window.__debug = { THREE, robot, camera };   // for automated checks
+  if (params.has('debug') || params.has('audiotest')) window.__debug = { THREE, robot, camera, audio };   // for automated checks
 }
 
 /** Without WebGL there are no cards to click: show each project's details right under it. */

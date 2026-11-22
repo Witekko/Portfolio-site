@@ -440,5 +440,8 @@ export function createRobotStage(items, cssScene) {
   /** World-space centre of a card (for the camera to frame it). */
   const cardCenterWorld = (k, out = new THREE.Vector3()) => cards[k].group.getWorldPosition(out);
 
-  return { stage, update, syncCss, cards, pickHeld, cardCenterWorld, held: () => heldCard, yaw: () => arm.turret.rotation.y };
+  return { stage, update, syncCss, cards, pickHeld, cardCenterWorld, held: () => heldCard, yaw: () => arm.turret.rotation.y,
+    /** For sound: where the gripper is, how the turret is turned, how closed the grip is. */
+    motion: () => ({ x: arm.tool.position.x, y: arm.tool.position.y, z: arm.tool.position.z, yaw: arm.turret.rotation.y, grip: pose.grip }),
+  };
 }
