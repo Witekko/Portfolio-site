@@ -66,21 +66,16 @@ Mały panel „tune me”: gęstość cząsteczek, kolor akcentu, prędkość ro
 - **Dostępność:** dźwięk zawsze z wyborem i wyłącznikiem, a reduced-motion wyłącza efekty.
 - **Brama** to dodatkowe kliknięcie przed treścią. Dlatego krótka, z widocznym postępem.
 
-## „O mnie”: wnętrze głowy
+## „O mnie”: jazda po mózgu
 
-Sieć neuronowa okazała się zbyt statyczna (zostaje na gałęzi `feature/about-network`). Nowy kierunek, zarys zrobiony:
+Pierwszy zarys (przewijane rozdziały z linią z boku) odpadł: kamera nie wchodziła do głowy, a całość była zwykłym przewijaniem. Teraz:
 
-- **Wejście:** kliknięcie w twarz, kamera wlatuje do głowy, „O mnie” ma własne przewijanie z bezwładnością.
-- **Ścieżka:** pomarańczowa linia rysuje się przy przewijaniu, a po niej jedzie mały line follower. Cztery przystanki, przy każdym cząsteczki układają się w symbol:
-  - 01 Automatyka i Robotyka (2020–2024): ramię robota,
-  - 02 Magisterka (2024–2025): sieć z pracy o G2,
-  - 03 Praca dziś (2025–teraz): wagon kolejowy, z którego unoszą się dane (bez nazwy firmy),
-  - 04 Machine Learning: sieć zbudowana w 37%, dalej linia przerywana.
-- **Po godzinach:** kostka Rubika z cząsteczek w tle, działające światła startowe F1 (czas reakcji, najlepszy wynik zapamiętany).
+- **Wejście:** kamera wlatuje w twarz, przez moment ciemno, a potem widać mózg-planetę z góry i kamera zjeżdża za line followera.
+- **Start:** światła F1, pierwszy ruch po zgaśnięciu to czas reakcji (do usunięcia, jeśli się nie sprawdzi).
+- **Jazda:** kółko, strzałki albo przesunięcie palcem to gaz; kamera zza robota jak w grze. Planeta obraca się pod robotem, horyzont się zakrzywia.
+- **Etapy** wyrastają po prawej z cząsteczek: ramię robota, praca o G2, wagon z danymi, sieć ML w 37%.
+- **Umiejętności** to żetony na linii (z CV); robot je zbiera do ekwipunku na dole. Odcinek ML: linia przerywana i zablokowane żetony „?”.
+- **Pit stop** na końcu: kostka, gitara i F1 (na razie opis, interakcje później).
+- Bez WebGL albo przy ograniczonym ruchu zostają zwykłe rozdziały (about.js).
 
-Do zrobienia po kolei:
-1. Kostka do kręcenia, która układa się w 11,84 s.
-2. Gitara: struny do szarpania, strojone do muzyki strony.
-3. Osiągnięcia na całej stronie (gaming).
-4. Bio od Witka zamiast roboczego zdania w „hello”.
-5. Mocniejszy symbol na start „hello” (teraz helisa).
+Do zrobienia: kostka do kręcenia (11,84 s), gitara, osiągnięcia, bio Witka.

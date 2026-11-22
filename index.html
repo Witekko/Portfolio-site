@@ -213,10 +213,26 @@
     </section>
   </main>
 
-  <!-- About: opened by clicking the face. Inside the head: a walk along a line, then things to play with. -->
+  <!-- About: opened by clicking the face. With WebGL: a ride around a brain-planet (journey.js).
+       The chapters below are the plain version (no WebGL / reduced motion) and the source of the ride's texts. -->
   <section class="about" id="about" role="dialog" aria-modal="true" aria-labelledby="about-title" data-lenis-prevent hidden>
+    <div class="j-veil" aria-hidden="true"></div>
+    <button type="button" class="about-close mono" id="about-close">← Back <kbd>Esc</kbd></button>
+    <div class="journey" hidden>
+      <div class="j-lights" aria-live="polite">
+        <span class="lamps" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+        <p class="j-lights-msg mono"></p>
+      </div>
+      <article class="j-card" aria-live="polite"><p class="j-kicker mono"></p><h3></h3><p class="j-text"></p></article>
+      <div class="j-labels" aria-hidden="true"></div>
+      <p class="j-hint mono">scroll or ↑ ↓ to drive</p>
+      <p class="j-toast mono" role="status" hidden></p>
+      <div class="j-inv">
+        <p class="mono">skills <b class="j-count">0</b>/18</p>
+        <ol class="j-slots" aria-label="Skills collected"></ol>
+      </div>
+    </div>
     <div class="about-inner">
-      <button type="button" class="about-close mono" id="about-close">← Back <kbd>Esc</kbd></button>
 
       <header class="chapter about-hello" data-chapter="0">
         <p class="eyebrow mono">About me</p>

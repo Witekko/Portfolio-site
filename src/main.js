@@ -7,9 +7,9 @@
  *   2–7 one shape per project, pushed back as a dim backdrop while a robot arm
  *       (robot.js) hands over each project's video card, driven by scroll
  *   last  the signature again, for contact (the robot signs it)
- *   A  About (about.js): the camera flies into the head, then the particles follow the About
- *      chapters: hello, the four stops on the line (robot arm, thesis, rail car, a network
- *      still loading), off hours (a Rubik's cube)
+ *   A  About: the camera dives through the face into the head, where a line follower drives
+ *      around a brain-planet (journey.js). Without WebGL or with reduced motion: plain
+ *      chapters (about.js).
  * Around it (world.js): dust through the whole page and a soft floor under the robot.
  * Scrolling is smoothed with inertia (Lenis) for the mouse wheel; touch keeps its own.
  */
@@ -23,6 +23,7 @@ import { createAudio } from './audio.js';
 import { createGate } from './gate.js';
 import { initScramble } from './scramble.js';
 import { createAbout } from './about.js';
+import { createJourney } from './journey.js';
 
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const isSmall = () => innerWidth <= 860;
@@ -99,7 +100,8 @@ const vertexShader = /* glsl */`
 
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mv;
-    gl_PointSize = uSize * aData.z * (1.0 + pen * 1.8) / -mv.z;
+    gl_PointSize = min(uSize * aData.z * (1.0 + pen * 1.8) / -mv.z, 160.0);
+    vAlpha *= smoothstep(0.1, 0.9, -mv.z);
   }
 `;
 
@@ -221,6 +223,12 @@ async function init() {
   scene.add(dust.points);
   const floor = createFloor({ y: FLOOR_Y, base: BASE, pool: { x: 1.0, z: -3 } });
   robot.stage.add(floor.points);
+  // About as a ride around a brain-planet (not with reduced motion: there the plain chapters).
+  const journey = reduceMotion ? null : createJourney({ small: isSmall(), audio, root: aboutEl });
+  if (journey) scene.add(journey.group);
+  const veil = aboutEl.querySelector('.j-veil');
+  const J_CUT = 0.42;            // About tween: before this the camera dives into the face, after it the ride
+  const JOURNEY_TIME = 3.0;
 
   /* ---- layout ---- */
   let scale = 1;
@@ -299,6 +307,7 @@ async function init() {
     uniforms.uSize.value = (scale / 270) * pxPerUnit * 1.6;
     dust.setPx(pxPerUnit);
     floor.setPx(pxPerUnit, h * renderer.getPixelRatio());
+    journey?.setView(w, h, (h * renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(25))));
     floor.points.visible = !isSmall();   // on phones the robot sits high, the floor would be a thin band across the copy
     measure();
   }
@@ -353,7 +362,7 @@ async function init() {
     lastFocus = document.activeElement;
     aboutFrom = Math.round(fDisp);
     aboutEl.hidden = false;
-    about.open();
+    if (journey) { aboutEl.classList.add('is-journey'); journey.enter(); } else about.open();
     aboutShown = 0;
     requestAnimationFrame(() => aboutEl.classList.add('is-open'));
     document.body.classList.add('is-about');
@@ -366,10 +375,10 @@ async function init() {
   function closeAbout() {
     if (aboutTarget === 0) return;
     aboutTarget = 0;
-    about.close();
+    if (journey) journey.exit(); else about.close();
     audio.whoosh(false);
     aboutEl.classList.remove('is-open');
-    document.body.classList.remove('is-about');
+    if (!journey) document.body.classList.remove('is-about');   // the ride: when the camera is back out
     document.documentElement.classList.remove('is-locked');
     syncScroll();
     lastFocus?.focus?.({ preventScroll: true });
@@ -385,6 +394,23 @@ async function init() {
       if (i < 0 || (e.shiftKey ? i === 0 : i === items.length - 1)) { e.preventDefault(); items[e.shiftKey ? items.length - 1 : 0].focus(); }
     }
   });
+  /* ---- The ride: wheel, keys, a swipe drive; a tap is a reaction at the start lights ---- */
+  if (journey) {
+    const riding = () => aboutTarget === 1;
+    addEventListener('wheel', (e) => { if (riding()) journey.push(e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY, e.timeStamp); }, { passive: true });
+    addEventListener('keydown', (e) => { if (riding() && journey.key(e, true)) e.preventDefault(); });
+    addEventListener('keyup', (e) => { if (riding()) journey.key(e, false); });
+    let touchY = null;
+    aboutEl.addEventListener('touchstart', (e) => { touchY = e.touches[0].clientY; }, { passive: true });
+    aboutEl.addEventListener('touchmove', (e) => {
+      if (!riding() || touchY === null) return;
+      const y = e.touches[0].clientY;
+      journey.push((touchY - y) * 2.5, e.timeStamp);
+      touchY = y;
+    }, { passive: true });
+    aboutEl.addEventListener('pointerdown', (e) => { if (riding() && !e.target.closest('button, a')) journey.tap(e.timeStamp); });
+  }
+
   /* ---- Inspect: click the presented card, the arm holds it out and the camera moves in ---- */
   const inspectEl = $('#inspect');
   const inspectClose = $('#inspect-close');
@@ -522,6 +548,7 @@ async function init() {
   }
 
   let warmShown = -1, coolShown = -1;
+  const faceTmp = new THREE.Vector3();
   function frame() {
     const now = performance.now() / 1000;
     lenis?.raf(now * 1000);
@@ -544,9 +571,23 @@ async function init() {
     else fDisp += (target - fDisp) * Math.min(1, dt * 7);
 
     // About tween
-    aboutT = clamp01(aboutT + (aboutTarget ? 1 : -1) * dt / (reduceMotion ? 0.01 : ABOUT_TIME));
-    if (aboutTarget === 0 && aboutT === 0 && !aboutEl.hidden && !aboutEl.classList.contains('is-open')) aboutEl.hidden = true;
+    aboutT = clamp01(aboutT + (aboutTarget ? 1 : -1) * dt / (reduceMotion ? 0.01 : journey ? JOURNEY_TIME : ABOUT_TIME));
+    if (aboutTarget === 0 && aboutT === 0 && !aboutEl.hidden && !aboutEl.classList.contains('is-open')) {
+      aboutEl.hidden = true;
+      aboutEl.classList.remove('is-journey');
+      document.body.classList.remove('is-about');
+    }
     const a = easeInOut(aboutT);
+    // The ride: dive (aboutT < J_CUT), a black frame at the cut, then the brain-planet.
+    const jOn = !!journey && aboutT > 0;
+    const inside = jOn && aboutT >= J_CUT;
+    if (journey) {
+      journey.group.visible = inside;
+      veil.style.opacity = jOn ? String(clamp01(1 - Math.abs(aboutT - J_CUT) / 0.09)) : '0';
+      if (jOn) journey.update(dt, t, inside ? (aboutT - J_CUT) / (1 - J_CUT) : 0);
+    }
+    points.visible = !inside;
+    dust.points.visible = !inside;
 
     // Inspect tween
     inspectT = clamp01(inspectT + (inspectTarget ? 1 : -1) * dt / (reduceMotion ? 0.01 : inspectSpeed));
@@ -565,7 +606,13 @@ async function init() {
     // Done writing: the arm folds into a calm pose to the right, away from the signature.
     const rest = easeInOut(clamp01((writeTime - penPlan.duration - 0.25) / 1.6));
 
-    if (aboutT > 0) {
+    if (jOn) {
+      setPair(aboutFrom, 1);   // whatever was on screen becomes the face you dive into
+      uniforms.uMix.value = aboutFrom === 1 ? 0 : smoothstep(0, 0.7, aboutT / J_CUT);
+      uniforms.uWrite.value = 1;
+      uniforms.uWriteTo.value = 1;
+      uniforms.uFlight.value = 0.2;
+    } else if (aboutT > 0) {
       const ch = about.chapter();
       aboutShown += (ch - aboutShown) * Math.min(1, dt * 5);
       const ci = Math.min(4, Math.floor(aboutShown)), cf = smoothstep(0.2, 0.8, aboutShown - ci);
@@ -588,7 +635,8 @@ async function init() {
     faceHover = aboutT === 0 && intro >= 1 && Math.abs(fDisp - 1) < 0.03 && onFace();
     document.body.classList.toggle('is-face-hover', faceHover);
     let tx = 0, ty = 0;
-    if (aboutT > 0) { ty = Math.sin(t * 0.3) * 0.3 + (pointerSeen && !reduceMotion ? ndc.x * 0.4 : 0); tx = 0.12 - (pointerSeen && !reduceMotion ? ndc.y * 0.15 : 0); }
+    if (jOn) { ty = 0; tx = 0; }
+    else if (aboutT > 0) { ty = Math.sin(t * 0.3) * 0.3 + (pointerSeen && !reduceMotion ? ndc.x * 0.4 : 0); tx = 0.12 - (pointerSeen && !reduceMotion ? ndc.y * 0.15 : 0); }
     else if (fDisp < 1.5) {
       // The head turns toward the cursor anywhere on the first screen, not only over the face
       // (clicking still needs the face). tanh: quick to react near the head, eases out toward the edges.
@@ -616,7 +664,7 @@ async function init() {
     if (reduceMotion) pDisp = Math.round(p);
     else pDisp += (p - pDisp) * Math.min(1, dt * 6);
     const vis = smoothstep(-0.95, -0.45, pDisp) * (1 - a);
-    robot.stage.visible = vis > 0.001;
+    robot.stage.visible = vis > 0.001 && !inside;
     cssRenderer.domElement.style.visibility = robot.stage.visible ? 'visible' : 'hidden';
     if (robot.stage.visible) {
       robot.stage.position.y = base.stageY - (1 - easeInOut(vis)) * base.stageDrop * robot.stage.scale.y;
@@ -648,6 +696,7 @@ async function init() {
     if (seqT >= SIGN_START && pen.lift < 0.3) scratch = Math.max(scratch, clamp01(Math.hypot(pen.x - lastPen.x, pen.y - lastPen.y) / Math.max(dt, 1e-3) / 0.9));
     lastPen = { x: pen.x, y: pen.y };
     const contactAmt = smoothstep(NP + 0.4, NP + 0.9, s);
+    if (inside) servo = journey.speed01 * 0.8;   // the line follower's motor
     audio.update({ projects: smoothstep(0.4, 1.0, s) * (1 - contactAmt), about: a, contact: contactAmt, inspect: ie, scratch, servo });
     document.body.classList.toggle('is-card-hover', cardHover);
 
@@ -673,9 +722,22 @@ async function init() {
       camY = lerp(0, c.y + (fy - 0.5) * viewHgt, ie);
       camZ = lerp(camZ, c.z + dist, ie);
     }
-    camera.position.set(camX, camY, camZ);
-    camera.fov = FOV + 14 * bump;
-    camera.updateProjectionMatrix();
+    if (inside) journey.camera(camera, (aboutT - J_CUT) / (1 - J_CUT), t);
+    else if (jOn) {
+      // Dive: straight into the face and through it.
+      const kd = Math.pow(aboutT / J_CUT, 2.2);
+      points.updateMatrixWorld();
+      const face = points.localToWorld(faceTmp.set(F.FACE_HIT.cx, F.FACE_HIT.cy, 0.3));
+      camera.position.set(lerp(0, face.x, kd), lerp(0, face.y, kd), lerp(CAM_Z, face.z - 0.7, kd));
+      camera.rotation.set(0, 0, 0);
+      camera.fov = FOV + 45 * kd;
+      camera.updateProjectionMatrix();
+    } else {
+      camera.position.set(camX, camY, camZ);
+      camera.rotation.set(0, 0, 0);
+      camera.fov = FOV + 14 * bump;
+      camera.updateProjectionMatrix();
+    }
 
     // World: going down to the robot's level lifts the dust as fast as the robot's cell rises.
     const descent = easeInOut(smoothstep(-0.95, -0.45, pDisp));
@@ -727,7 +789,7 @@ async function init() {
     gate.leave(reduceMotion);
   });
   if (new URLSearchParams(location.search).has("about")) openAbout();   // debug: ?about=1
-  if (params.has('debug') || params.has('audiotest')) window.__debug = { THREE, robot, camera, audio, lenis };   // for automated checks
+  if (params.has('debug') || params.has('audiotest')) window.__debug = { THREE, robot, camera, audio, lenis, journey };   // for automated checks
 }
 
 /** Without WebGL there are no cards to click: show each project's details right under it. */

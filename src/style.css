@@ -177,8 +177,8 @@ h2 { margin: 0; font-size: clamp(36px, 4.4vw, 64px); line-height: 1; letter-spac
 }
 .about-inner { position: relative; width: min(36rem, 100%); padding: 0 var(--pad) 18svh; }
 .about-close {
-  position: sticky; top: 76px; z-index: 2;
-  display: inline-flex; align-items: center; gap: 10px; margin: 76px 0 0; padding: 8px 12px; font-size: 13px; color: var(--ink);
+  position: sticky; top: 76px; z-index: 3;
+  display: inline-flex; align-items: center; gap: 10px; margin: 76px 0 0 var(--pad); padding: 8px 12px; font-size: 13px; color: var(--ink);
   background: #0a1530; border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
 }
 .about-close:hover { background: #142650; }
@@ -213,6 +213,58 @@ h2 { margin: 0; font-size: clamp(36px, 4.4vw, 64px); line-height: 1; letter-spac
 .station.next h3 { color: var(--hot); }
 .station .loading { font-size: 12px; color: var(--hot); }
 .station .loading span { display: inline-block; min-width: 2ch; text-align: right; }
+
+/* ------------------------------------------------- about: the ride -- */
+/* The ride (journey.js) draws in WebGL; here only the HUD over it. */
+.about.is-journey { overflow: hidden; opacity: 1; transition: none; touch-action: none; }
+.about.is-journey:not(.is-open) { pointer-events: none; }   /* on the way out the page takes the wheel again */
+.about.is-journey::before, .about.is-journey::after, .about.is-journey .about-inner { display: none; }
+.about.is-journey .about-close { position: fixed; top: 76px; margin: 0; left: var(--pad); }
+.j-veil { position: fixed; inset: 0; background: #02050d; opacity: 0; pointer-events: none; z-index: 2; }
+.journey { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
+.journey[hidden] { display: none; }
+.j-lights { position: absolute; top: 74px; left: 50%; transform: translate(-50%, -12px); display: grid; justify-items: center; gap: 10px; opacity: 0; transition: opacity .4s, transform .4s; }
+.j-lights.is-on { opacity: 1; transform: translate(-50%, 0); }
+.j-lights .lamps { padding: 8px 10px; border-radius: 14px; background: rgba(4, 8, 18, .85); border: 1px solid var(--line); }
+.j-lights-msg { margin: 0; font-size: 13px; color: var(--muted); text-align: center; min-height: 1.4em; }
+.j-lights-msg b { color: var(--ink); font-size: 20px; font-weight: 500; margin-right: 6px; }
+.j-card {
+  position: absolute; left: var(--pad); top: 136px; width: min(25rem, calc(100vw - 2 * var(--pad)));
+  padding: 20px 22px; border-radius: 16px; background: rgba(5, 11, 26, .78); border: 1px solid var(--line);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  opacity: 0; transform: translateX(-16px); transition: opacity .35s ease, transform .35s ease;
+}
+.j-card.is-in { opacity: 1; transform: none; }
+.j-kicker { margin: 0 0 8px; font-size: 12px; color: var(--hot); letter-spacing: .04em; }
+.j-card h3 { margin: 0; font-size: clamp(22px, 2vw, 28px); font-weight: 600; letter-spacing: -.02em; line-height: 1.15; }
+.j-text { margin: 10px 0 0; color: #c3d0e8; font-size: 15px; line-height: 1.55; text-wrap: pretty; }
+.j-text b { color: var(--ink); font-weight: 500; }
+.j-labels span, .j-chip { position: fixed; left: 0; top: 0; padding: 3px 8px; border-radius: 999px; font: 500 11px var(--mono); white-space: nowrap; color: #dce8ff; background: rgba(20, 45, 110, .75); border: 1px solid rgba(120, 165, 255, .45); opacity: 0; will-change: transform; }
+.j-labels span.locked { color: #9aa4b8; background: rgba(40, 46, 60, .75); border-color: rgba(150, 160, 180, .35); }
+.j-chip { opacity: 1; transition: transform .6s cubic-bezier(.5, 0, .3, 1), opacity .6s ease; color: var(--hot-ink); background: var(--hot); border-color: var(--hot); }
+.j-hint { position: absolute; left: 50%; bottom: 104px; margin: 0; transform: translateX(-50%); font-size: 12px; color: var(--muted); opacity: 0; transition: opacity .4s; }
+.j-hint.is-in { opacity: 1; }
+.j-toast { position: absolute; left: 50%; bottom: 132px; margin: 0; transform: translateX(-50%); padding: 6px 12px; border-radius: 999px; font-size: 12px; color: #c9d2e4; background: rgba(30, 36, 52, .85); border: 1px solid rgba(150, 160, 180, .3); }
+.j-inv { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: grid; justify-items: center; gap: 8px; max-width: calc(100vw - 24px); padding: 10px 12px; border-radius: 14px; background: rgba(4, 9, 22, .72); border: 1px solid var(--line); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); opacity: 0; transition: opacity .5s; }
+.journey.is-in .j-inv { opacity: 1; }
+.j-inv > p { margin: 0; font-size: 12px; color: var(--muted); }
+.j-inv > p b { color: var(--hot); font-weight: 500; }
+.j-slots { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.j-slots li { display: grid; place-items: center; min-width: 40px; height: 26px; padding: 0 6px; border-radius: 7px; font: 500 11px var(--mono); color: transparent; border: 1px dashed rgba(120, 165, 255, .3); background: rgba(5, 11, 26, .55); transition: background .3s, color .3s, border-color .3s; }
+.j-slots li.got { color: var(--hot-ink); background: var(--hot); border: 1px solid var(--hot); box-shadow: 0 0 12px rgba(255, 138, 61, .45); }
+.j-slots li.locked { color: #6c7690; border-color: rgba(150, 160, 180, .25); }
+@media (max-width: 860px) {
+  .j-lights { top: 124px; }
+  .j-card { top: auto; bottom: 60px; left: 12px; width: calc(100vw - 24px); padding: 12px 14px; }
+  .j-card h3 { font-size: 20px; }
+  .j-text { font-size: 13px; line-height: 1.45; }
+  .j-inv { bottom: 10px; padding: 6px 10px; gap: 4px; }
+  .j-inv > p { font-size: 11px; }
+  .j-slots { flex-wrap: nowrap; gap: 4px; }
+  .j-slots li { min-width: 0; width: 11px; height: 11px; padding: 0; font-size: 0; border-radius: 3px; }
+  .j-hint { bottom: auto; top: 190px; }
+  .j-toast { bottom: auto; top: 220px; }
+}
 
 /* Off hours: things to play with. */
 .off-hours h3 { margin: 0; font-size: clamp(30px, 3vw, 42px); font-weight: 600; letter-spacing: -.02em; }

@@ -239,6 +239,19 @@ export function createAudio() {
     },
     /** Camera moves: in (up) or back out (down). */
     whoosh(up = true) { burst(up ? { from: 500, to: 2400, dur: 0.9, level: 0.03, q: 2 } : { from: 2000, to: 420, dur: 0.7, level: 0.025, q: 2 }); },
+    /** Picking up a skill token: two quick bell notes, up. */
+    collect() {
+      if (!enabled) return;
+      const t = ctx.currentTime;
+      [[880, 0], [1318.5, 0.07]].forEach(([fq, d]) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = fq;
+        g.gain.setValueAtTime(0, t + d);
+        g.gain.linearRampToValueAtTime(0.05, t + d + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.5);
+        o.connect(g).connect(n.sfx); o.start(t + d); o.stop(t + d + 0.55);
+      });
+    },
     /** A short beep (F1 start lights). */
     blip(freq = 660) {
       if (!enabled) return;
