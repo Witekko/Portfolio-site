@@ -22,7 +22,9 @@ const SENSORS = [-0.064, -0.032, 0, 0.032, 0.064];   // across its nose
 const NOSE = 0.11;                                   // sensors this far ahead of its centre
 const SEE = 0.03;                                    // a sensor sees the line within this distance
 const SPEED = 0.42, KP = 40, KD = 1.4, MAX_TURN = 6;
-const LOST_AFTER = 1.4;                              // seconds of searching before it gives up
+// A corner that turns more than this within about one car length is too sharp: the car
+// can't turn that fast and flies straight off it (a fifth of a full turn, ~72°).
+const SHARP = Math.PI * 2 * 0.2, SHARP_SPAN = 0.08;
 const STALL_AFTER = 3;                               // seconds without getting further along the line
 const MAXP = 900, STEP = 0.018, LINE_W = 0.034;
 
@@ -31,7 +33,7 @@ const TALK = {
   short: ['That is a dot. Draw a longer track.', 'A bit longer, please. I need room to drive.'],
   go: ['Sensors on. Here we go.', 'Following. Do not blink.', 'Line found. Rolling.'],
   done: ['Made it. Draw a harder one?', 'Track complete. Got anything sharper?', 'Easy. Try some tight corners.'],
-  lost: ['Lost the line. The cardboard one did that too.', 'Too sharp for me. Real sensors, real limits.', 'Off the track. That corner wins.'],
+  lost: ['Too sharp. I flew straight off. The cardboard one did that too.', 'That corner wins. Real sensors, real limits.', 'Off the track. Draw it a bit rounder?'],
 };
 
 /** The car, built flat on the glass, facing +x. */
@@ -141,7 +143,27 @@ export function createLineFollower({ onStatus = () => {}, audio = null, small = 
   car.g.visible = false;
   group.add(car.g);
   const carPos = new THREE.Vector2();
-  let heading = 0, prevErr = 0, lastErr = 0, lostFor = 0, progress = 0, placeAt = 0, stallFor = 0;
+  let heading = 0, prevErr = 0, lastErr = 0, progress = 0, placeAt = 0, stallFor = 0;
+  let sharpAt = [], offAt = 0, offV = 0;
+  /** Where the track turns too sharply (indices along it). */
+  function findSharp() {
+    sharpAt = [];
+    const w = Math.max(2, Math.round(SHARP_SPAN / STEP));
+    for (let i = w; i < pts.length - w; i++) {
+      const a = Math.atan2(pts[i].y - pts[i - w].y, pts[i].x - pts[i - w].x);
+      const b = Math.atan2(pts[i + w].y - pts[i].y, pts[i + w].x - pts[i].x);
+      let d = Math.abs(b - a);
+      if (d > Math.PI) d = Math.PI * 2 - d;
+      if (d > SHARP) { sharpAt.push(i - Math.round(w / 2)); i += w; }   // one per corner
+    }
+  }
+  /** Too sharp: it keeps going straight, rolls off the line and stops beside it. */
+  function flyOff(v) {
+    state = 'offline';
+    offAt = 0;   // seconds rolling (simulation time, so a slow device rolls just as far)
+    offV = SPEED;   // it was going too fast for that corner: full speed, straight on
+    car.eyes.forEach((e) => e.material.color.setHex(0x5a2a10));
+  }
 
   // The pen: follows your hand while you draw, otherwise waits beside the board.
   const tip = REST.clone(), penTarget = REST.clone();
@@ -160,7 +182,8 @@ export function createLineFollower({ onStatus = () => {}, audio = null, small = 
     while (k < pts.length - 1 && pts[k].distanceTo(p0) < 0.08) k++;
     heading = Math.atan2(pts[k].y - p0.y, pts[k].x - p0.x);
     carPos.set(p0.x - Math.cos(heading) * NOSE, p0.y - Math.sin(heading) * NOSE);
-    prevErr = lastErr = 0; lostFor = 0; progress = 0; stallFor = 0;
+    prevErr = lastErr = 0; progress = 0; stallFor = 0;
+    findSharp();
     car.g.visible = true;
     state = 'place';
     placeAt = performance.now();
@@ -176,7 +199,7 @@ export function createLineFollower({ onStatus = () => {}, audio = null, small = 
   let parkAt = 0, parkV = 0;
   function park() {
     state = 'park';
-    parkAt = performance.now();
+    parkAt = 0;
     parkV = SPEED * 0.6;
     car.eyes.forEach((e) => e.material.color.setHex(0xffb27a));
   }
@@ -201,14 +224,11 @@ export function createLineFollower({ onStatus = () => {}, audio = null, small = 
     if (on) {
       const err = sum / on;
       omega = Math.max(-MAX_TURN, Math.min(MAX_TURN, KP * err + KD * (err - prevErr) / Math.max(dt, 1e-3)));
-      prevErr = err; lastErr = err; lostFor = 0;
+      prevErr = err; lastErr = err;
       v *= 1 - Math.min(0.6, (Math.abs(err) / 0.064) * 0.6);   // slower into corners
     } else {
       if (nearEnd(nx, ny)) { park(); return; }   // the line ran out under its nose: that is the finish, not lost
-      lostFor += dt;   // searching: turn toward where it last saw the line
-      omega = (lastErr >= 0 ? 1 : -1) * 3;
-      v = 0.06;
-      if (lostFor > LOST_AFTER) { end(false); return; }
+      flyOff(v); return;   // lost the line: it doesn't search, it rolls on off it
     }
     heading += omega * dt;
     carPos.x += Math.cos(heading) * v * dt;
@@ -217,6 +237,7 @@ export function createLineFollower({ onStatus = () => {}, audio = null, small = 
     const fx = carPos.x + Math.cos(heading) * NOSE, fy = carPos.y + Math.sin(heading) * NOSE;
     const n = nearest(fx, fy);
     if (n.d < 0.06 && n.i > progress) { progress = n.i; stallFor = 0; } else stallFor += dt;
+    if (sharpAt.length && progress >= sharpAt[0]) { flyOff(v); return; }   // the corner is too sharp to take
     if (stallFor > STALL_AFTER) { end(false); return; }   // going round in circles at a corner: it is lost
     const last = pts[pts.length - 1];
     if (progress >= pts.length - 3 && Math.hypot(fx - last.x, fy - last.y) < 0.03) park();
@@ -227,7 +248,7 @@ export function createLineFollower({ onStatus = () => {}, audio = null, small = 
     group,
     rest: REST,
     get state() { return state; },
-    get showHud() { return ['draw', 'drawing', 'place', 'run', 'end'].includes(state); },
+    get showHud() { return ['draw', 'drawing', 'place', 'run', 'offline', 'park', 'end'].includes(state); },
     pen: () => ({ tip, lift }),
     caption: new THREE.Vector3(BOARD.x, BOARD.y - C * 1.75, BOARD.z),
     plane: { point: BOARD, normal: new THREE.Vector3(0, 0, 1) },
@@ -304,10 +325,17 @@ export function createLineFollower({ onStatus = () => {}, audio = null, small = 
         let left = dt;   // small steps: the controller stays stable when a frame is slow
         while (left > 0 && state === 'run') { const h = Math.min(left, 1 / 120); drive(h); left -= h; }
       }
+      if (state === 'offline') {
+        offV *= Math.exp(-dt * 0.9);   // no brakes: it coasts to a stop, well clear of the line
+        carPos.x += Math.cos(heading) * offV * dt; carPos.y += Math.sin(heading) * offV * dt;
+        offAt += dt;
+        if (offAt > 1.8) end(false);
+      }
       if (state === 'park') {
         parkV *= Math.exp(-dt * 9);   // brakes
         carPos.x += Math.cos(heading) * parkV * dt; carPos.y += Math.sin(heading) * parkV * dt;
-        if (performance.now() - parkAt > 450) end(true);
+        parkAt += dt;
+        if (parkAt > 0.45) end(true);
       }
       if (car.g.visible) {
         car.g.position.x = carPos.x; car.g.position.y = carPos.y;
