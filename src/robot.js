@@ -310,8 +310,11 @@ export function createRobotStage(items, cssScene) {
   parkPen();
 
   /** Keyframes for presenting card k; u runs 0..1 across its scroll segment. */
-  function cardKeys(k) {
-    const from = k === 0 ? rest : above(k - 1);
+  /** Above slot k, or the rest pose for k < 0 (nothing taken yet). */
+  const aboveOr = (k) => (k < 0 ? rest : above(k));
+  /** fromK: where the arm comes from (default: the card before). A jump comes from further away. */
+  function cardKeys(k, fromK = null) {
+    const from = fromK !== null ? aboveOr(fromK) : k === 0 ? rest : above(k - 1);
     return [
       [0.00, from, Q_SLOT, 0],
       [0.08, above(k), Q_SLOT, 0],
@@ -343,9 +346,9 @@ export function createRobotStage(items, cssScene) {
     ];
   }
   /** After the last card (times in seconds): fetch the pen and bring it to the start of the signature. */
-  function penKeys(writeStartGrip) {
+  function penKeys(writeStartGrip, fromK = null) {
     return [
-      [0.0, above(cards.length - 1), Q_SLOT, 0],
+      [0.0, fromK !== null ? aboveOr(fromK) : above(cards.length - 1), Q_SLOT, 0],
       [1.0, cupAbove, Q_UPRIGHT, 0],
       [1.45, PEN_IN_CUP, Q_UPRIGHT, 0],
       [1.65, PEN_IN_CUP, Q_UPRIGHT, 1],
@@ -377,10 +380,12 @@ export function createRobotStage(items, cssScene) {
    * opts.seq: the timed ending, { t (seconds), writeStart: Vector3, write: { tip: Vector3, lift } | null, rest: 0..1 }
    *           positions in stage space; while seq.t > 0 it takes over from the cards.
    * opts.inspect: 0..1, how far the held card is brought out toward the camera
+   * opts.fromK: a jump: the arm comes to this card (or to the pen) from above slot fromK
+   *             (-1: from rest), instead of from the card before it
    * opts.game: Tic-Tac-Toe, { t (seconds, 0..GAME_READY), k (the game's card), rest: pen tip waiting
    *            by the board, write: { tip, lift } | null }, stage space; while t > 0 it takes over.
    */
-  function update(p, t, motion = true, { seq = null, inspect = 0, game = null } = {}) {
+  function update(p, t, motion = true, { seq = null, inspect = 0, game = null, fromK = null } = {}) {
     const n = cards.length;
     let holdingPen = false;
     heldCard = -1;
@@ -397,7 +402,7 @@ export function createRobotStage(items, cssScene) {
     } else if (!seq || seq.t <= 0) {
       const k = THREE.MathUtils.clamp(Math.floor(p + 0.5), 0, n - 1);
       const u = clamp01(p + 0.5 - k);
-      sample(cardKeys(k), u, pose);
+      sample(cardKeys(k, fromK), u, pose);
       if (u > 0.18 && u < 0.86) heldCard = k;
       // Breathing while the card is held up for reading.
       if (motion) {
@@ -413,7 +418,7 @@ export function createRobotStage(items, cssScene) {
       }
     } else {
       const startGrip = gripForTip(seq.writeStart ?? new THREE.Vector3(0, 0, 0), 1);
-      sample(penKeys(startGrip), seq.t, pose);
+      sample(penKeys(startGrip, fromK), seq.t, pose);
       holdingPen = seq.t > 1.55;
       if (seq.write && seq.t >= SIGN_START) {
         gripForTip(seq.write.tip, seq.write.lift, pose.attach);

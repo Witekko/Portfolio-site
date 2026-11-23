@@ -668,6 +668,8 @@ async function init() {
   const forceScene = params.has('scene') ? Number(params.get('scene')) : null;   // debug: ?scene=3
   const start = performance.now() / 1000;
   let lastMotion = null, lastPen = { x: 0, y: 0 };
+  // The arm's own position in the story (pArm). It follows the scroll, except on far jumps.
+  let pArm = -0.5, jump = null;
   let last = start, fDisp = 0, pDisp = -1, rotX = 0, rotY = 0, activeScene = -1, hintMode = '';
 
   /* ---- Intro cooldown: the page stays on the first screen until the head is built ----
@@ -684,9 +686,16 @@ async function init() {
   const glideTo = (hash) => {
     const el = hash.length > 1 && document.querySelector(hash);
     if (!el) return;
-    if (lenis) lenis.scrollTo(el, { duration: 1.6, easing: easeInOut });
-    else el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' });
+    // A scene: glide to its centre (where its card is presented), not to its top edge.
+    measure();
+    const i = scenes.indexOf(el);
+    const y = i >= 0 ? centers[i] : el.getBoundingClientRect().top + scrollY;
+    glideGoal = y;   // the arm needs to know where the glide is going from its start
+    if (lenis) lenis.scrollTo(y, { duration: 1.6, easing: easeInOut, onComplete: () => { glideGoal = null; } });
+    else scrollTo({ top: y, behavior: reduceMotion ? 'auto' : 'smooth' });
   };
+  let glideGoal = null;
+  addEventListener('wheel', () => { glideGoal = null; }, { passive: true });   // a wheel takes over from a glide
   document.addEventListener('click', (e) => {
     const a = e.target.closest('a[href^="#"]');
     if (!a || a.hasAttribute('data-open-about') || a.classList.contains('skip')) return;
@@ -791,7 +800,7 @@ async function init() {
 
     // Contact: the ending sequence plays on time once the last card is back in the magazine.
     const pNow = s - 1;
-    const atContact = pNow > NP - 0.45 && pDisp > NP - 0.5;
+    const atContact = pNow > NP - 0.45 && pDisp > NP - 0.5 && (jump ? jump.phase === 'park' : pArm > NP - 0.55);
     const SEQ_END = SIGN_START + 0.2 + penPlan.duration + 2.2;   // write, then fold away
     if (reduceMotion) seqT = atContact ? SEQ_END : 0;
     else seqT = atContact ? Math.min(SEQ_END, seqT + dt) : Math.max(0, seqT - dt * 3);
@@ -855,7 +864,7 @@ async function init() {
     }
 
     // Tic-Tac-Toe: start once the card is presented; the arm's clock runs forward, or back to leave.
-    if (gamePending && Math.abs(pNow - TTT_K) < 0.03 && Math.abs(pDisp - TTT_K) < 0.03 && seqT === 0 && inspectT === 0 && aboutT === 0) {
+    if (gamePending && !jump && Math.abs(pNow - TTT_K) < 0.03 && Math.abs(pArm - TTT_K) < 0.03 && seqT === 0 && inspectT === 0 && aboutT === 0) {
       gamePending = false; gameTarget = 1; gameLeaving = false;
       document.documentElement.classList.add('is-game');
       tttUi.classList.add('is-playing');
@@ -890,6 +899,38 @@ async function init() {
     if (reduceMotion) pDisp = Math.round(p);
     else pDisp += (p - pDisp) * Math.min(1, dt * 6);
     const vis = smoothstep(-0.95, -0.45, pDisp) * (1 - aFx);
+
+    /* The arm on far jumps (a menu or rail link, a long scroll): it doesn't play every card in
+       between at speed. It puts back the card it holds, waits for the page to arrive, then
+       takes the right card straight from its slot (or goes for the pen at Contact). */
+    const pT = THREE.MathUtils.clamp(pDisp, -0.5, NP - 0.5);
+    const pGoal = THREE.MathUtils.clamp((forceScene === null && (glideGoal !== null || lenis) ? storyPosition(glideGoal ?? lenis.targetScroll) : s) - 1, -0.5, NP - 0.5);
+    if (!jump && !reduceMotion && gameT === 0 && seqT === 0 && vis > 0.01 && Math.abs(pGoal - pArm) > 1.05) {
+      const kk = Math.min(NP - 1, Math.max(0, Math.floor(pArm + 0.5)));
+      // Holding a card (or on its way back with it): finish putting it back. Still empty-handed: go back up.
+      const back = pArm < -0.3 ? { from: -1, to: pArm } : pArm - kk < -0.32 ? { from: kk - 1, to: kk - 0.5 } : { from: kk, to: kk + 0.5 };
+      jump = { phase: 'stow', from: back.from, a: pArm, b: back.to, t: 0, dur: Math.min(1.2, Math.max(0.2, Math.abs(back.to - pArm) * 2.6)) };
+    }
+    if (jump) {
+      if (jump.phase === 'stow') {
+        jump.t += dt;
+        pArm = THREE.MathUtils.lerp(jump.a, jump.b, easeInOut(clamp01(jump.t / jump.dur)));
+        if (jump.t >= jump.dur) jump.phase = 'park';
+      } else if (jump.phase === 'park') {
+        const settled = Math.abs(pGoal - pT) < 0.01 && Math.abs(p - pDisp) < 0.02;
+        if (vis <= 0.01) { jump = null; pArm = pT; }                         // out of sight: just be there
+        else if (settled && pNow < NP - 0.45) {                              // arrived at a project: fetch its card
+          const kT = Math.min(NP - 1, Math.max(0, Math.round(pT)));
+          Object.assign(jump, { phase: 'fetch', a: kT - 0.5, b: kT, t: 0, dur: 1.5 });
+          pArm = kT - 0.5;
+        }
+      } else if (jump.phase === 'fetch') {
+        jump.t += dt;
+        pArm = THREE.MathUtils.lerp(jump.a, jump.b, easeInOut(clamp01(jump.t / jump.dur)));
+        if (jump.t >= jump.dur) jump = null;
+        else if (Math.abs(pGoal - jump.b) > 0.6) { jump = null; }           // the page moved on mid-fetch: follow it again
+      }
+    } else pArm = pT;
     robot.stage.visible = vis > 0.001 && !inside;
     cssRenderer.domElement.style.visibility = robot.stage.visible ? 'visible' : 'hidden';
     if (robot.stage.visible) {
@@ -902,7 +943,7 @@ async function init() {
       robot.stage.updateMatrixWorld();
       const writeStart = toStage(penPlan.start.x, penPlan.start.y, new THREE.Vector3());
       const penWrite = seqT >= SIGN_START ? { tip: toStage(pen.x, pen.y, sigLocal), lift: pen.lift } : null;
-      robot.update(THREE.MathUtils.clamp(pDisp, -0.5, NP - 0.5), t, !reduceMotion, { seq: { t: seqT, writeStart, write: penWrite, rest }, inspect: ie, game: gameT > 0 ? { t: gameT, k: TTT_K, rest: ttt.rest, write: ttt.pen() } : null });
+      robot.update(pArm, t, !reduceMotion, { seq: { t: seqT, writeStart, write: penWrite, rest }, inspect: ie, fromK: jump && jump.phase !== 'stow' ? jump.from : null, game: gameT > 0 ? { t: gameT, k: TTT_K, rest: ttt.rest, write: ttt.pen() } : null });
     }
 
     // Hovering the presented card shows it can be clicked.
@@ -1032,7 +1073,7 @@ async function init() {
     gate.leave(reduceMotion);
   });
   if (new URLSearchParams(location.search).has("about")) openAbout();   // debug: ?about=1
-  if (params.has('debug') || params.has('audiotest')) window.__debug = { THREE, robot, camera, audio, lenis, journey, get ttt() { return ttt; }, games: GAMES };   // for automated checks
+  if (params.has('debug') || params.has('audiotest')) window.__debug = { get jump() { return jump; }, get pArm() { return pArm; }, THREE, robot, camera, audio, lenis, journey, get ttt() { return ttt; }, games: GAMES };   // for automated checks
 }
 
 /** Without WebGL there are no cards to click: show each project's details right under it. */
