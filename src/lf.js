@@ -167,6 +167,19 @@ export function createLineFollower({ onStatus = () => {}, audio = null, small = 
     onStatus(say(TALK.go));
     audio?.blip(660);
   }
+  /** The sensors are at the end of the line (not just somewhere near it on a loop). */
+  function nearEnd(x, y) {
+    const last = pts[pts.length - 1];
+    return progress >= pts.length - 8 && Math.hypot(x - last.x, y - last.y) < 0.09;
+  }
+  /** Finish: it rolls to a stop at the end of the line, then celebrates. */
+  let parkAt = 0, parkV = 0;
+  function park() {
+    state = 'park';
+    parkAt = performance.now();
+    parkV = SPEED * 0.6;
+    car.eyes.forEach((e) => e.material.color.setHex(0xffb27a));
+  }
   function end(ok) {
     state = 'end';
     onStatus(say(ok ? TALK.done : TALK.lost), true);
@@ -191,6 +204,7 @@ export function createLineFollower({ onStatus = () => {}, audio = null, small = 
       prevErr = err; lastErr = err; lostFor = 0;
       v *= 1 - Math.min(0.6, (Math.abs(err) / 0.064) * 0.6);   // slower into corners
     } else {
+      if (nearEnd(nx, ny)) { park(); return; }   // the line ran out under its nose: that is the finish, not lost
       lostFor += dt;   // searching: turn toward where it last saw the line
       omega = (lastErr >= 0 ? 1 : -1) * 3;
       v = 0.06;
@@ -199,12 +213,13 @@ export function createLineFollower({ onStatus = () => {}, audio = null, small = 
     heading += omega * dt;
     carPos.x += Math.cos(heading) * v * dt;
     carPos.y += Math.sin(heading) * v * dt;
-    // How far along the line it got; the end of the line is the finish.
-    const n = nearest(carPos.x, carPos.y);
-    if (n.d < 0.12 && n.i > progress) { progress = n.i; stallFor = 0; } else stallFor += dt;
+    // How far along the line it got, measured at the sensors (they lead the car by NOSE).
+    const fx = carPos.x + Math.cos(heading) * NOSE, fy = carPos.y + Math.sin(heading) * NOSE;
+    const n = nearest(fx, fy);
+    if (n.d < 0.06 && n.i > progress) { progress = n.i; stallFor = 0; } else stallFor += dt;
     if (stallFor > STALL_AFTER) { end(false); return; }   // going round in circles at a corner: it is lost
     const last = pts[pts.length - 1];
-    if (progress >= pts.length - 4 && Math.hypot(nx - last.x, ny - last.y) < 0.05) { end(true); return; }
+    if (progress >= pts.length - 3 && Math.hypot(fx - last.x, fy - last.y) < 0.03) park();
     if (!inside({ x: carPos.x, y: carPos.y }, 0.15)) end(false);
   }
 
@@ -288,6 +303,11 @@ export function createLineFollower({ onStatus = () => {}, audio = null, small = 
       if (state === 'run') {
         let left = dt;   // small steps: the controller stays stable when a frame is slow
         while (left > 0 && state === 'run') { const h = Math.min(left, 1 / 120); drive(h); left -= h; }
+      }
+      if (state === 'park') {
+        parkV *= Math.exp(-dt * 9);   // brakes
+        carPos.x += Math.cos(heading) * parkV * dt; carPos.y += Math.sin(heading) * parkV * dt;
+        if (performance.now() - parkAt > 450) end(true);
       }
       if (car.g.visible) {
         car.g.position.x = carPos.x; car.g.position.y = carPos.y;
