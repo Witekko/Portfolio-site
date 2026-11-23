@@ -26,7 +26,7 @@ Pomysły do portfolio, odłożone na później. Prototyp, którego dotyczą: [pr
 ## Następne etapy
 
 1. ~~**Nowa karta „O mnie”**~~: zrobiona jako jazda line followerem po mózgu-planecie (szczegóły w KLIMAT.md i niżej).
-2. **Grywalne mini-demo z manipulatorem:** ~~Tic-Tac-Toe~~ zrobione: „Play against the robot” przy projekcie, ramię odkłada kartę, bierze pióro, rysuje planszę na szybie i gra minimaksem (najlepszy wynik to remis). Zostają: Line Follower po narysowanej linii, interaktywny wykres IKE.
+2. **Grywalne mini-demo z manipulatorem:** ~~Tic-Tac-Toe~~ zrobione: „Play against the robot” przy projekcie, ramię odkłada kartę, bierze pióro, rysuje planszę na szybie i gra minimaksem (najlepszy wynik to remis). Line Follower też zrobiony: „Draw me a track”, rysujesz trasę na szkle (pióro ramienia idzie za ręką), robocik z 5 czujnikami i regulatorem PD jedzie po linii, na zbyt ostrych zakrętach ją gubi. Wykres IKE odpada (jest pełna wersja na żywo), Dance Game z żyroskopem też (za dużo).
 
 ## Jazda po mózgu („O mnie”): plan poprawek
 

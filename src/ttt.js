@@ -65,6 +65,37 @@ const circle = (c, r, steps = 44) => Array.from({ length: steps + 1 }, (_, i) =>
   return new THREE.Vector3(c.x + Math.cos(a) * r, c.y + Math.sin(a) * r, c.z);
 });
 
+/* --------------------------------------------------------------- glass -- */
+
+/**
+ * The glass board the games are drawn on: a faint tint, a brighter rim, a diagonal sheen.
+ * width: its width; it is taller than wide and hangs below (x, y), the board's centre, so
+ * there is room under the board for the robot's lines. Shared with the Line Follower game.
+ */
+export function makeGlass(width, x, y, z) {
+  const W = 512, H = 640, cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const c = cv.getContext('2d');
+  c.beginPath(); c.roundRect(6, 6, W - 12, H - 12, 36);
+  c.fillStyle = 'rgba(150, 190, 255, 0.10)'; c.fill();
+  c.lineWidth = 4; c.strokeStyle = 'rgba(190, 215, 255, 0.55)'; c.stroke();
+  c.save(); c.clip();
+  const g = c.createLinearGradient(0, 0, W, H * 0.6);   // the sheen
+  g.addColorStop(0.18, 'rgba(255,255,255,0)'); g.addColorStop(0.3, 'rgba(255,255,255,0.13)');
+  g.addColorStop(0.36, 'rgba(255,255,255,0)'); g.addColorStop(0.44, 'rgba(255,255,255,0.06)'); g.addColorStop(0.5, 'rgba(255,255,255,0)');
+  c.fillStyle = g; c.fillRect(0, 0, W, H);
+  c.restore();
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false });
+  const h = width * (H / W);
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, h), mat);
+  const homeY = y - (h - width) / 2;
+  mesh.position.set(x, homeY, z - 0.012);
+  mesh.renderOrder = 4;
+  return { mesh, mat, homeY, width };
+}
+
 /* -------------------------------------------------------------- minimax -- */
 
 function winner(b) {
@@ -132,29 +163,7 @@ export function createTicTacToe({ onStatus = () => {}, audio = null, small = fal
   group.visible = false;
   let glassIn = 0;   // the glass slides up into place before the board is drawn
   const tip = REST.clone();
-  const glass = (() => {
-    const W = 512, H = 640, cv = document.createElement('canvas');
-    cv.width = W; cv.height = H;
-    const x = cv.getContext('2d');
-    const r = 36;
-    x.beginPath(); x.roundRect(6, 6, W - 12, H - 12, r);
-    x.fillStyle = 'rgba(150, 190, 255, 0.10)'; x.fill();
-    x.lineWidth = 4; x.strokeStyle = 'rgba(190, 215, 255, 0.55)'; x.stroke();
-    x.save(); x.clip();
-    const g = x.createLinearGradient(0, 0, W, H * 0.6);   // the sheen
-    g.addColorStop(0.18, 'rgba(255,255,255,0)'); g.addColorStop(0.3, 'rgba(255,255,255,0.13)');
-    g.addColorStop(0.36, 'rgba(255,255,255,0)'); g.addColorStop(0.44, 'rgba(255,255,255,0.06)'); g.addColorStop(0.5, 'rgba(255,255,255,0)');
-    x.fillStyle = g; x.fillRect(0, 0, W, H);
-    x.restore();
-    const tex = new THREE.CanvasTexture(cv);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false });
-    // Taller than the board: the robot's lines are shown under it (main.js puts the text there).
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(C * 3.7, C * 3.7 * (H / W)), mat);
-    mesh.position.set(BOARD.x, BOARD.y - C * 3.7 * (H / W - 1) / 2, BOARD.z - 0.012);
-    mesh.renderOrder = 4;
-    return { mesh, mat };
-  })();
+  const glass = makeGlass(C * 3.7, BOARD.x, BOARD.y, BOARD.z);
   let lift = 1, board = Array(9).fill(null), marks = [], grid = [], state = 'off', fade = 1;
   let steps = [], stepAt = 0, afterSteps = null, xAnim = null, thinkUntil = 0;
 
@@ -252,6 +261,10 @@ export function createTicTacToe({ onStatus = () => {}, audio = null, small = fal
     rest: REST,
     get state() { return state; },
     get yourTurn() { return state === 'you'; },
+    /** Show the robot's lines and the buttons under the board. */
+    get showHud() { return ['grid', 'you', 'think', 'placing', 'robot', 'end'].includes(state); },
+    /** What the pointer over the board would do: 'pick' (a free square on your turn) or ''. */
+    cursor(p) { return state === 'you' && this.squareAt(p) >= 0 ? 'pick' : ''; },
     /** The pen for robot.update: { tip, lift } in stage space. */
     pen: () => ({ tip, lift }),
     /** The arm is ready by the board: draw it (or just wait, if it is already there). */
@@ -332,7 +345,7 @@ export function createTicTacToe({ onStatus = () => {}, audio = null, small = fal
         if (glassIn >= 1) drawGrid();
       }
       const gi = ease(glassIn);
-      glass.mesh.position.y = BOARD.y - C * 3.7 * (640 / 512 - 1) / 2 - (1 - gi) * C * 0.4;
+      glass.mesh.position.y = glass.homeY - (1 - gi) * C * 0.4;
       glass.mat.opacity = gi * fade;
       // Leaving: the ink fades with the arm.
       if (fade !== visible01) {

@@ -19,6 +19,7 @@ import { CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer.js';
 import * as F from './formations.js';
 import { createRobotStage, SIGN_START, GAME_READY, FLOOR_Y, BASE } from './robot.js';
 import { createTicTacToe } from './ttt.js';
+import { createLineFollower } from './lf.js';
 import { createDust, createFloor } from './world.js';
 import { createAudio } from './audio.js';
 import { createGate } from './gate.js';
@@ -548,7 +549,7 @@ async function init() {
   addEventListener('click', (e) => {
     if (e.target.closest('a, button, input, .about, .inspect-panel')) return;
     if (aboutTarget === 1) return;
-    if (gameTarget === 1) { const pt = boardPoint(); if (pt) ttt.click(pt); return; }
+    if (gameTarget === 1) { const pt = boardPoint(); if (pt) ttt.click?.(pt); return; }
     if (inspectTarget === 1) { closeInspect(); return; }
     if (cardHover) { openInspect(robot.held()); return; }
     if (isTouch && robot.stage.visible && aboutT === 0 && !gameOn()) {
@@ -566,23 +567,22 @@ async function init() {
     el.querySelector('.copy').appendChild(hint);
   });
 
-  /* ---- Tic-Tac-Toe against the robot, in the Tic-Tac-Toe project ----
-     "Play" puts the card back, the arm takes the pen and draws the board on the glass in
-     front of it; you click squares. The page doesn't scroll while you play; Stop / Esc /
-     a link in the menu ends it, and the arm plays its moves back in reverse. */
-  const TTT_K = projectEls.findIndex((el) => el.id === 'p-ttt');
+  /* ---- Games with the robot, in their projects ----
+     Tic-Tac-Toe: the arm draws the board on glass in front of it, you play X against
+     minimax. Line Follower: you draw a track on the glass (the arm's pen follows your hand)
+     and a little line follower drives it. Starting a game puts the card back and takes the
+     pen; the page doesn't scroll while you play; Stop / Esc / a menu link ends it and the
+     arm plays its moves back in reverse. One game at a time: `ttt` is the one in play. */
+  const GAMES = !reduceMotion ? [
+    { id: 'p-ttt', play: 'Try to beat me', again: 'Rematch', make: createTicTacToe },
+    { id: 'p-line', play: 'Draw me a track', again: 'New track', make: createLineFollower },
+  ].map((g) => ({ ...g, k: projectEls.findIndex((el) => el.id === g.id) })).filter((g) => g.k >= 0) : [];
   let gameTarget = 0, gameT = 0, gamePending = false, gameLeaving = false, afterGame = null;
   const gameOn = () => gameTarget === 1 || gameT > 0;
-  let ttt = null, tttUi = null, tttHud = null, tttSay = null, tttHudOn = false;
+  let ttt = null, tttUi = null, TTT_K = -1, tttHud = null, tttSay = null, tttHudOn = false, againBtn = null;
   const tttTip = new THREE.Vector3(-99, 0, 0);
-  if (TTT_K >= 0 && !reduceMotion) {
-    // In the project's copy: just the invitation.
-    tttUi = document.createElement('div');
-    tttUi.className = 'ttt-ui';
-    tttUi.innerHTML = '<button type="button" class="btn btn-primary ttt-play">Try to beat me</button>';
-    const copy = projectEls[TTT_K].querySelector('.copy');
-    copy.insertBefore(tttUi, copy.querySelector('.peek'));
-    // On the glass, under the board: what the robot says, and the buttons.
+  if (GAMES.length) {
+    // On the glass, under the board: what the robot says, and the buttons (shared by the games).
     tttHud = document.createElement('div');
     tttHud.className = 'ttt-hud';
     tttHud.innerHTML = '<p class="ttt-say mono" aria-live="polite"><span class="ttt-who">robot ›</span> <span class="ttt-line"></span></p>'
@@ -590,25 +590,46 @@ async function init() {
       + '<button type="button" class="btn btn-ghost ttt-stop">Stop <kbd>Esc</kbd></button></div>';
     document.body.appendChild(tttHud);
     tttSay = tttHud.querySelector('.ttt-line');
-    const againBtn = tttHud.querySelector('.ttt-again');
+    againBtn = tttHud.querySelector('.ttt-again');
     let sayTimer = 0;
-    ttt = createTicTacToe({ audio, small: isSmall(), onStatus: (text, ended) => {
-      // The old line blurs out, the new one comes in.
-      clearTimeout(sayTimer);
-      tttSay.parentNode.classList.add('is-swap');
-      sayTimer = setTimeout(() => { tttSay.textContent = text; tttSay.parentNode.classList.remove('is-swap'); }, 140);
-      tttHud.classList.toggle('is-ended', !!ended);
-      againBtn.tabIndex = ended ? 0 : -1;
-    } });
-    robot.stage.add(ttt.group);
-    tttUi.querySelector('.ttt-play').addEventListener('click', startGame);
+    GAMES.forEach((g) => {
+      // In the project's copy: just the invitation.
+      g.ui = document.createElement('div');
+      g.ui.className = 'ttt-ui';
+      g.ui.innerHTML = `<button type="button" class="btn btn-primary ttt-play">${g.play}</button>`;
+      const copy = projectEls[g.k].querySelector('.copy');
+      copy.insertBefore(g.ui, copy.querySelector('.peek'));
+      g.game = g.make({ audio, small: isSmall(), onStatus: (text, ended) => {
+        if (ttt !== g.game) return;
+        // The old line blurs out, the new one comes in.
+        clearTimeout(sayTimer);
+        tttSay.parentNode.classList.add('is-swap');
+        sayTimer = setTimeout(() => { tttSay.textContent = text; tttSay.parentNode.classList.remove('is-swap'); }, 140);
+        tttHud.classList.toggle('is-ended', !!ended);
+        againBtn.tabIndex = ended ? 0 : -1;
+      } });
+      robot.stage.add(g.game.group);
+      g.ui.querySelector('.ttt-play').addEventListener('click', () => startGame(g));
+    });
     tttHud.querySelector('.ttt-stop').addEventListener('click', () => stopGame());
-    againBtn.addEventListener('click', () => ttt.again());
+    againBtn.addEventListener('click', () => ttt?.again());
     addEventListener('keydown', (e) => { if (e.key === 'Escape' && gameTarget === 1) stopGame(); });
+    // Drawing (Line Follower): pointer down / move / up on the board go to the game.
+    const toGame = (type) => (e) => {
+      if (gameTarget !== 1 || !ttt.pointer || e.target.closest?.('button, a')) return;
+      if (ttt.pointer(type, boardPoint()) && e.cancelable && type !== 'up') e.preventDefault();
+    };
+    addEventListener('pointerdown', toGame('down'));
+    addEventListener('pointermove', toGame('move'));
+    addEventListener('pointerup', toGame('up'));
+    addEventListener('pointercancel', toGame('up'));
+    addEventListener('touchmove', (e) => { if (gameTarget === 1 && ttt?.drawing) e.preventDefault(); }, { passive: false });
   }
-  function startGame() {
-    if (!ttt || gameOn()) return;
+  function startGame(g) {
+    if (!g || gameOn()) return;
     if (inspectTarget === 1) closeInspect(true);
+    ttt = g.game; tttUi = g.ui; TTT_K = g.k;
+    againBtn.textContent = g.again;
     measure();
     const y = centers[TTT_K + 1];   // the card is presented when its section is centred
     if (lenis) lenis.scrollTo(y, { duration: Math.abs(scrollY - y) < 4 ? 0 : 1.0 }); else scrollTo(0, y);
@@ -836,6 +857,7 @@ async function init() {
     // Tic-Tac-Toe: start once the card is presented; the arm's clock runs forward, or back to leave.
     if (gamePending && Math.abs(pNow - TTT_K) < 0.03 && Math.abs(pDisp - TTT_K) < 0.03 && seqT === 0 && inspectT === 0 && aboutT === 0) {
       gamePending = false; gameTarget = 1; gameLeaving = false;
+      document.documentElement.classList.add('is-game');
       tttUi.classList.add('is-playing');
       syncScroll();
     }
@@ -846,18 +868,21 @@ async function init() {
       ttt.update(dt, gameTarget ? 1 : smoothstep(GAME_READY - 1.2, GAME_READY, gameT));
       if (was > 0 && gameT === 0 && !gameTarget) {   // back to presenting the card
         gameLeaving = false;
+        document.documentElement.classList.remove('is-game');
         tttUi.classList.remove('is-playing');   // the invitation comes back once the card is back in hand
         syncScroll();
         if (afterGame) { const h = afterGame; afterGame = null; glideTo(h); history.replaceState(null, '', h); }
       }
-      const hudOn = gameTarget === 1 && !gameLeaving && ['grid', 'you', 'think', 'placing', 'robot', 'end'].includes(ttt.state) && robot.stage.visible;
+      const hudOn = gameTarget === 1 && !gameLeaving && ttt.showHud && robot.stage.visible;
       if (hudOn !== tttHudOn) { tttHudOn = hudOn; tttHud.classList.toggle('is-on', hudOn); }
       if (hudOn || tttHud.classList.contains('is-on')) {
         robot.stage.updateMatrixWorld();
         const c = robot.stage.localToWorld(boardHit.copy(ttt.caption)).project(camera);
         tttHud.style.transform = `translate(${((c.x + 1) / 2) * viewW()}px, ${((1 - c.y) / 2) * viewH()}px) translate(-50%, 0)`;
       }
-      document.body.classList.toggle('is-ttt-pick', gameTarget === 1 && ttt.yourTurn && !isTouch && ttt.squareAt(boardPoint() ?? tttTip) >= 0);
+      const cur = gameTarget === 1 && !isTouch ? ttt.cursor(boardPoint() ?? tttTip) : '';
+      document.body.classList.toggle('is-ttt-pick', cur === 'pick');
+      document.body.classList.toggle('is-game-draw', cur === 'draw' || (gameTarget === 1 && !!ttt.drawing));
     }
 
     // Robot: p = 0 → card 1 held up, 1 → card 2, … (scroll-driven, smoothed); then the timed ending.
@@ -1007,7 +1032,7 @@ async function init() {
     gate.leave(reduceMotion);
   });
   if (new URLSearchParams(location.search).has("about")) openAbout();   // debug: ?about=1
-  if (params.has('debug') || params.has('audiotest')) window.__debug = { THREE, robot, camera, audio, lenis, journey, ttt };   // for automated checks
+  if (params.has('debug') || params.has('audiotest')) window.__debug = { THREE, robot, camera, audio, lenis, journey, get ttt() { return ttt; }, games: GAMES };   // for automated checks
 }
 
 /** Without WebGL there are no cards to click: show each project's details right under it. */

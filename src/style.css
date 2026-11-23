@@ -343,6 +343,8 @@ h2 { margin: 0; font-size: clamp(36px, 4.4vw, 64px); line-height: 1; letter-spac
 .ttt-hud.is-ended .ttt-again { opacity: 1; transform: none; pointer-events: auto; }
 .ttt-hud kbd { font: inherit; font-size: 11px; color: var(--muted); margin-left: 6px; }
 body.is-ttt-pick { cursor: pointer; }
+body.is-game-draw { cursor: crosshair; }
+html.is-game, html.is-game body { touch-action: none; overscroll-behavior: none; }
 
 /* Off hours: things to play with. */
 .off-hours h3 { margin: 0; font-size: clamp(30px, 3vw, 42px); font-weight: 600; letter-spacing: -.02em; }
