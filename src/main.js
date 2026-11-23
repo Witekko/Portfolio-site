@@ -554,6 +554,10 @@ async function init() {
     if (e.target.closest('a, button, input, .about, .inspect-panel')) return;
     if (aboutTarget === 1) return;
     if (gameTarget === 1) { const pt = boardPoint(); if (pt) ttt.click?.(pt); return; }
+    if (seqT > CARD_SHOWN - 0.3 && robot.stage.visible) {   // the business card's links
+      const url = robot.pickCardLink(ndc, camera);
+      if (url) { track('card_link', { url }); window.open(url, '_blank', 'noopener'); return; }
+    }
     if (inspectTarget === 1) { closeInspect(); return; }
     if (cardHover) { openInspect(robot.held()); return; }
     if (isTouch && robot.stage.visible && aboutT === 0 && !gameOn()) {
@@ -790,6 +794,7 @@ async function init() {
   }
 
   let warmShown = -1, coolShown = -1;
+  const offCard = new THREE.Vector2(9, 9);
   const faceTmp = new THREE.Vector3(), lookTmp = new THREE.Vector3(), lookFrom = new THREE.Vector3();
   /** Leaving the ride for a project: while the screen is black, the page is already there. */
   function landAt(hash) {
@@ -1041,6 +1046,10 @@ async function init() {
     const contactAmt = smoothstep(NP + 0.4, NP + 0.9, s);
     if (inside) servo = journey.speed01 * 0.8;   // the line follower's motor
     audio.update({ projects: smoothstep(0.4, 1.0, s) * (1 - contactAmt), about: a, contact: contactAmt, inspect: ie, scratch, servo });
+    // The business card: its links light up under the pointer.
+    const overCard = !isTouch && robot.stage.visible && seqT > CARD_SHOWN - 0.3 && !gameOn();
+    const cardLink = robot.pickCardLink(overCard ? ndc : offCard, camera);   // off the card: clears the highlight
+    document.body.classList.toggle('is-link-hover', !!cardLink);
     document.body.classList.toggle('is-card-hover', cardHover);
 
     // Camera: fly into the head when About opens; move in on the card when inspecting.

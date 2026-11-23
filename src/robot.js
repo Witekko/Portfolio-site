@@ -232,6 +232,11 @@ function buildPen(stage) {
 }
 
 /** The business card and the little stand it waits in, next to the cup. Origin: its top edge. */
+// The links on the business card (the same as the buttons in Contact).
+const CARD_LINKS = [
+  { label: 'LinkedIn', url: 'https://www.linkedin.com/in/witold-korzeniewski-64a56b27b/', primary: true },
+  { label: 'GitHub', url: 'https://github.com/Witekko/' },
+];
 function buildBusinessCard(stage) {
   const stand = new THREE.Group();
   const foot = m(new RoundedBoxGeometry(0.36, 0.05, 0.2, 2, 0.015), mat.dark);
@@ -245,6 +250,8 @@ function buildBusinessCard(stage) {
 
   const W = 1024, H = Math.round(1024 * BC_H / BC_W), cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
+  let hover = -1;
+  const rects = [];   // where each link is drawn, in canvas pixels
   const draw = () => {
     const c = cv.getContext('2d');
     const css = getComputedStyle(document.documentElement);
@@ -260,7 +267,23 @@ function buildBusinessCard(stage) {
     c.fillText('Industrial data engineer,', 64, 306);
     c.fillText('moving into machine learning.', 64, 356);
     c.fillStyle = '#93a6c8'; c.font = `500 30px ${mono}`;
-    c.fillText('Wrocław, Poland  ·  LinkedIn  ·  github.com/Witekko', 64, H - 56);
+    c.fillText('Wrocław, Poland', 64, H - 58);
+    // The links: pill buttons, right-aligned, so they read as something to click.
+    c.font = `600 32px ${sans}`;
+    let x = W - 56;
+    rects.length = 0;
+    [...CARD_LINKS].reverse().forEach((l) => {
+      const label = `${l.label} ↗`, tw = c.measureText(label).width, bw = tw + 56, bh = 66, y = H - 58 - 46;
+      x -= bw;
+      const i = CARD_LINKS.indexOf(l), on = hover === i;
+      c.beginPath(); c.roundRect(x, y, bw, bh, bh / 2);
+      if (l.primary) { c.fillStyle = on ? '#ffa264' : '#ff8a3d'; c.fill(); }
+      else { c.fillStyle = on ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0)'; c.fill(); c.lineWidth = 3; c.strokeStyle = on ? 'rgba(200,220,255,0.7)' : 'rgba(140,175,235,0.45)'; c.stroke(); }
+      c.fillStyle = l.primary ? '#1a0a00' : '#eef3ff';
+      c.fillText(label, x + 28, y + 44);
+      rects[i] = { x, y, w: bw, h: bh, url: l.url };
+      x -= 18;
+    });
     tex.needsUpdate = true;
   };
   const tex = new THREE.CanvasTexture(cv);
@@ -275,7 +298,16 @@ function buildBusinessCard(stage) {
   stage.add(card);
   draw();
   document.fonts?.ready.then(draw);   // the web fonts may arrive after the first draw
-  return card;
+  return {
+    card, face,
+    /** The link at a point of the face (uv, 0..1 from the bottom left), or null. */
+    linkAt(uv) {
+      const px = uv.x * W, py = (1 - uv.y) * H;
+      return rects.find((r) => px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) ?? null;
+    },
+    setHover(i) { if (i !== hover) { hover = i; draw(); } },
+    index: (r) => rects.indexOf(r),
+  };
 }
 
 /* ------------------------------------------------------------------ cards -- */
@@ -349,7 +381,8 @@ export function createRobotStage(items, cssScene) {
   const arm = buildArm(stage);
   buildMagazine(stage, items.length);
   const pen = buildPen(stage);
-  const bcard = buildBusinessCard(stage);
+  const bc = buildBusinessCard(stage);
+  const bcard = bc.card;
   const parkCardBC = () => { bcard.position.copy(BC_TOP); bcard.quaternion.copy(Q_STAND); };
   parkCardBC();
   const bcAbove = BC_TOP.clone().add(new THREE.Vector3(0, 0.5, 0.08));
@@ -552,7 +585,15 @@ export function createRobotStage(items, cssScene) {
   /** World-space centre of a card (for the camera to frame it). */
   const cardCenterWorld = (k, out = new THREE.Vector3()) => cards[k].group.getWorldPosition(out);
 
-  return { stage, update, syncCss, cards, pickHeld, cardCenterWorld, held: () => heldCard, yaw: () => arm.turret.rotation.y,
+  /** The link on the business card under the pointer (highlights it), or null. */
+  function pickCardLink(ndc, camera) {
+    raycaster.setFromCamera(ndc, camera);
+    const hit = raycaster.intersectObject(bc.face, false)[0];
+    const r = hit?.uv ? bc.linkAt(hit.uv) : null;
+    bc.setHover(r ? bc.index(r) : -1);
+    return r ? r.url : null;
+  }
+  return { stage, update, syncCss, cards, pickHeld, pickCardLink, cardCenterWorld, held: () => heldCard, yaw: () => arm.turret.rotation.y,
     /** For sound: where the gripper is, how the turret is turned, how closed the grip is. */
     motion: () => ({ x: arm.tool.position.x, y: arm.tool.position.y, z: arm.tool.position.z, yaw: arm.turret.rotation.y, grip: pose.grip }),
   };
