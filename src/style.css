@@ -326,6 +326,17 @@ h2 { margin: 0; font-size: clamp(36px, 4.4vw, 64px); line-height: 1; letter-spac
 .built-go { margin-left: 4px; color: var(--hot); text-decoration: none; }
 @media (hover: hover) and (pointer: fine) { .built-go:hover { text-decoration: underline; } }
 
+/* Tic-Tac-Toe against the robot. */
+.ttt-ui { margin-top: 20px; }
+.ttt-ui .ttt-status, .ttt-ui .ttt-actions { display: none; }
+.ttt-ui.is-playing .ttt-play { display: none; }
+.ttt-ui.is-playing .ttt-status { display: block; margin: 0; min-height: 1.4em; font-size: 13px; color: var(--hot); }
+.ttt-ui.is-playing .ttt-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.ttt-ui kbd { font: inherit; font-size: 11px; color: var(--muted); margin-left: 6px; }
+body.is-ttt-pick { cursor: pointer; }
+.ttt-ui [hidden] { display: none; }   /* .btn sets display, so hidden needs help */
+.copy:has(.ttt-ui.is-playing) .peek { display: none; }
+
 /* Off hours: things to play with. */
 .off-hours h3 { margin: 0; font-size: clamp(30px, 3vw, 42px); font-weight: 600; letter-spacing: -.02em; }
 .off-hours > p:not(.eyebrow) { margin: 14px 0 0; color: #c3d0e8; font-size: 17px; line-height: 1.6; }

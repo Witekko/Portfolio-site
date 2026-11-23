@@ -17,7 +17,8 @@ import * as THREE from 'three';
 import Lenis from 'lenis';
 import { CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer.js';
 import * as F from './formations.js';
-import { createRobotStage, SIGN_START, FLOOR_Y, BASE } from './robot.js';
+import { createRobotStage, SIGN_START, GAME_READY, FLOOR_Y, BASE } from './robot.js';
+import { createTicTacToe } from './ttt.js';
 import { createDust, createFloor } from './world.js';
 import { createAudio } from './audio.js';
 import { createGate } from './gate.js';
@@ -364,6 +365,7 @@ async function init() {
   const about = (aboutCtl = createAbout({ audio }));
   function openAbout() {
     if (aboutTarget === 1) return;
+    if (gameTarget === 1) stopGame();
     lastFocus = document.activeElement;
     aboutFrom = Math.round(fDisp);
     portal = journey && fDisp > 1.5 && fDisp < LAST - 0.6 ? 'robot' : 'face';
@@ -546,9 +548,10 @@ async function init() {
   addEventListener('click', (e) => {
     if (e.target.closest('a, button, input, .about, .inspect-panel')) return;
     if (aboutTarget === 1) return;
+    if (gameTarget === 1) { const pt = boardPoint(); if (pt) ttt.click(pt); return; }
     if (inspectTarget === 1) { closeInspect(); return; }
     if (cardHover) { openInspect(robot.held()); return; }
-    if (isTouch && robot.stage.visible && aboutT === 0) {
+    if (isTouch && robot.stage.visible && aboutT === 0 && !gameOn()) {
       const k = robot.pickHeld(ndc, camera);
       if (k >= 0) { openInspect(k); return; }
     }
@@ -562,6 +565,60 @@ async function init() {
     hint.textContent = isTouch ? 'tap the card to look closer' : 'click the card to look closer';
     el.querySelector('.copy').appendChild(hint);
   });
+
+  /* ---- Tic-Tac-Toe against the robot, in the Tic-Tac-Toe project ----
+     "Play" puts the card back, the arm takes the pen and draws the board on the glass in
+     front of it; you click squares. The page doesn't scroll while you play; Stop / Esc /
+     a link in the menu ends it, and the arm plays its moves back in reverse. */
+  const TTT_K = projectEls.findIndex((el) => el.id === 'p-ttt');
+  let gameTarget = 0, gameT = 0, gamePending = false, gameLeaving = false, afterGame = null;
+  const gameOn = () => gameTarget === 1 || gameT > 0;
+  let ttt = null, tttUi = null;
+  const tttTip = new THREE.Vector3(-99, 0, 0);
+  if (TTT_K >= 0 && !reduceMotion) {
+    tttUi = document.createElement('div');
+    tttUi.className = 'ttt-ui';
+    tttUi.innerHTML = '<button type="button" class="btn btn-primary ttt-play">Play against the robot</button>'
+      + '<p class="ttt-status mono" aria-live="polite"></p>'
+      + '<div class="ttt-actions"><button type="button" class="btn btn-ghost ttt-again" hidden>Play again</button>'
+      + '<button type="button" class="btn btn-ghost ttt-stop">Stop <kbd>Esc</kbd></button></div>';
+    const copy = projectEls[TTT_K].querySelector('.copy');
+    copy.insertBefore(tttUi, copy.querySelector('.peek'));
+    const status = tttUi.querySelector('.ttt-status'), againBtn = tttUi.querySelector('.ttt-again');
+    ttt = createTicTacToe({ audio, onStatus: (text, ended) => { status.textContent = text; againBtn.hidden = !ended; } });
+    robot.stage.add(ttt.group);
+    tttUi.querySelector('.ttt-play').addEventListener('click', startGame);
+    tttUi.querySelector('.ttt-stop').addEventListener('click', () => stopGame());
+    againBtn.addEventListener('click', () => ttt.again());
+    addEventListener('keydown', (e) => { if (e.key === 'Escape' && gameTarget === 1) stopGame(); });
+  }
+  function startGame() {
+    if (!ttt || gameOn()) return;
+    if (inspectTarget === 1) closeInspect(true);
+    measure();
+    const y = centers[TTT_K + 1];   // the card is presented when its section is centred
+    if (lenis) lenis.scrollTo(y, { duration: Math.abs(scrollY - y) < 4 ? 0 : 1.0 }); else scrollTo(0, y);
+    gamePending = true;
+  }
+  function stopGame(then = null) {
+    afterGame = then;
+    gamePending = false;
+    if (!gameTarget || gameLeaving) return;
+    gameLeaving = true;
+    tttUi.classList.remove('is-playing');
+    if (ttt.state === 'off') gameTarget = 0;          // still fetching the pen: just turn back
+    else ttt.finish(() => { gameTarget = 0; });        // pen back beside the board first, then leave
+  }
+  /** Where the pointer meets the board's glass, in stage space (or null). */
+  const boardHit = new THREE.Vector3(), boardPlane = new THREE.Plane();
+  function boardPoint() {
+    robot.stage.updateMatrixWorld();
+    const pw = robot.stage.localToWorld(boardHit.copy(ttt.plane.point));
+    boardPlane.setFromNormalAndCoplanarPoint(ttt.plane.normal, pw);
+    ray.setFromCamera(ndc, camera);
+    if (!ray.ray.intersectPlane(boardPlane, boardHit)) return null;
+    return robot.stage.worldToLocal(boardHit);
+  }
 
   /* ---- The robot signs at the end ---- */
   const penPlan = F.signaturePenPlan({ duration: 5.5 });
@@ -599,6 +656,7 @@ async function init() {
   document.addEventListener('click', (e) => {
     const a = e.target.closest('a[href^="#"]');
     if (!a || a.hasAttribute('data-open-about') || a.classList.contains('skip')) return;
+    if (gameTarget === 1) { e.preventDefault(); stopGame(a.getAttribute('href')); return; }
     if (a.getAttribute('href') !== '#top') markRide();
     if (!introDone) { e.preventDefault(); pendingHash = a.getAttribute('href'); hurry(); return; }
     if (aboutTarget === 1) {   // a link in the nav while inside the head: step out, then go
@@ -620,7 +678,7 @@ async function init() {
   }, true);
   function syncScroll() {
     if (!lenis) return;
-    if (introDone && aboutTarget === 0 && !exitTo) lenis.start(); else lenis.stop();
+    if (introDone && aboutTarget === 0 && !exitTo && !gameOn()) lenis.start(); else lenis.stop();
   }
   function endIntro() {
     introDone = true;
@@ -755,11 +813,30 @@ async function init() {
     const lerp = THREE.MathUtils.lerp;
     points.position.set(lerp(base.x, base.bgX, bg), lerp(base.y, base.bgY, bg), -BG_DEPTH * bg);
     points.scale.setScalar(lerp(scale, base.bgScale, bg));
-    uniforms.uAlphaMul.value = 1 - 0.62 * bg;
+    uniforms.uAlphaMul.value = (1 - 0.62 * bg) * (1 - 0.88 * smoothstep(0, 2, gameT));   // a game: the particle board behind steps back
     const ca = smoothstep(LAST - 0.7, LAST, fDisp) * (1 - aFx);   // Contact: where the robot signs
     if (ca > 0) {
       points.position.set(lerp(points.position.x, base.contactX, ca), lerp(points.position.y, base.contactY, ca), points.position.z);
       points.scale.setScalar(lerp(points.scale.x, base.contactScale, ca));
+    }
+
+    // Tic-Tac-Toe: start once the card is presented; the arm's clock runs forward, or back to leave.
+    if (gamePending && Math.abs(pNow - TTT_K) < 0.03 && Math.abs(pDisp - TTT_K) < 0.03 && seqT === 0 && inspectT === 0 && aboutT === 0) {
+      gamePending = false; gameTarget = 1; gameLeaving = false;
+      tttUi.classList.add('is-playing');
+      syncScroll();
+    }
+    if (ttt) {
+      const was = gameT;
+      gameT = gameTarget ? Math.min(GAME_READY, gameT + dt) : Math.max(0, gameT - dt * 1.4);
+      if (gameTarget && gameT >= GAME_READY && ttt.state === 'off' && !gameLeaving) ttt.begin();
+      ttt.update(dt, gameTarget ? 1 : smoothstep(GAME_READY - 1.2, GAME_READY, gameT));
+      if (was > 0 && gameT === 0 && !gameTarget) {   // back to presenting the card
+        gameLeaving = false;
+        syncScroll();
+        if (afterGame) { const h = afterGame; afterGame = null; glideTo(h); history.replaceState(null, '', h); }
+      }
+      document.body.classList.toggle('is-ttt-pick', gameTarget === 1 && ttt.yourTurn && !isTouch && ttt.squareAt(boardPoint() ?? tttTip) >= 0);
     }
 
     // Robot: p = 0 → card 1 held up, 1 → card 2, … (scroll-driven, smoothed); then the timed ending.
@@ -773,17 +850,18 @@ async function init() {
       robot.stage.position.y = base.stageY - (1 - easeInOut(vis)) * base.stageDrop * robot.stage.scale.y;
       // Signing: the cell steps back so the arm writes from behind the signature (like on glass)
       // and its elbow folds away from the viewer instead of across the letters.
-      robot.stage.position.z = -0.85 * robot.stage.scale.z * smoothstep(0, SIGN_START - 0.8, seqT);
+      // The game is drawn the same way, on glass in front of the arm.
+      robot.stage.position.z = -0.85 * robot.stage.scale.z * Math.max(smoothstep(0, SIGN_START - 0.8, seqT), smoothstep(1.2, GAME_READY - 0.4, gameT));
       points.updateMatrixWorld();
       robot.stage.updateMatrixWorld();
       const writeStart = toStage(penPlan.start.x, penPlan.start.y, new THREE.Vector3());
       const penWrite = seqT >= SIGN_START ? { tip: toStage(pen.x, pen.y, sigLocal), lift: pen.lift } : null;
-      robot.update(THREE.MathUtils.clamp(pDisp, -0.5, NP - 0.5), t, !reduceMotion, { seq: { t: seqT, writeStart, write: penWrite, rest }, inspect: ie });
+      robot.update(THREE.MathUtils.clamp(pDisp, -0.5, NP - 0.5), t, !reduceMotion, { seq: { t: seqT, writeStart, write: penWrite, rest }, inspect: ie, game: gameT > 0 ? { t: gameT, k: TTT_K, rest: ttt.rest, write: ttt.pen() } : null });
     }
 
     // Hovering the presented card shows it can be clicked.
     const wasCardHover = cardHover;
-    cardHover = !isTouch && robot.stage.visible && aboutT === 0 && inspectTarget === 0 && robot.pickHeld(ndc, camera) >= 0;
+    cardHover = !isTouch && robot.stage.visible && aboutT === 0 && inspectTarget === 0 && !gameOn() && robot.pickHeld(ndc, camera) >= 0;
     if (cardHover && !wasCardHover) audio.tick();
 
     // Sound follows the picture: servos from the arm's real motion, the pen from the pen.
@@ -798,6 +876,11 @@ async function init() {
     let scratch = entered && write > 0 && write < 1 ? 0.55 : 0;   // the intro signature
     if (seqT >= SIGN_START && pen.lift < 0.3) scratch = Math.max(scratch, clamp01(Math.hypot(pen.x - lastPen.x, pen.y - lastPen.y) / Math.max(dt, 1e-3) / 0.9));
     lastPen = { x: pen.x, y: pen.y };
+    if (ttt && gameT >= GAME_READY) {
+      const pp = ttt.pen();
+      if (pp.lift < 0.3 && tttTip.x > -90) scratch = Math.max(scratch, clamp01(pp.tip.distanceTo(tttTip) / Math.max(dt, 1e-3) / 0.6));
+      tttTip.copy(pp.tip);
+    } else tttTip.set(-99, 0, 0);
     const contactAmt = smoothstep(NP + 0.4, NP + 0.9, s);
     if (inside) servo = journey.speed01 * 0.8;   // the line follower's motor
     audio.update({ projects: smoothstep(0.4, 1.0, s) * (1 - contactAmt), about: a, contact: contactAmt, inspect: ie, scratch, servo });

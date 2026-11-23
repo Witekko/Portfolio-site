@@ -50,6 +50,9 @@ const REST_GRIP = new THREE.Vector3(1.0, -0.9 - ROD, 0.0);
 
 // Ending, on its own clock (seconds): to the cup, take the pen, bring it to the first stroke.
 export const SIGN_START = 3.3;
+// Tic-Tac-Toe, on its own clock (seconds): put the card back, take the pen, wait by the board.
+// Running the clock backwards plays it in reverse (pen back in the cup, card back in hand).
+export const GAME_READY = 4.3;
 
 const UP = new THREE.Vector3(0, 1, 0);
 const easeInOut = (x) => x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
@@ -324,6 +327,21 @@ export function createRobotStage(items, cssScene) {
       [1.00, above(k), Q_SLOT, 0],
     ];
   }
+  /** A game (times in seconds): card k back into the magazine, the pen out of the cup, ready by the board. */
+  function gameKeys(k, readyGrip) {
+    return [
+      [0.0, present, Q_PRESENT, 1],
+      [0.6, above(k), Q_SLOT, 1],
+      [0.95, grasp(k), Q_SLOT, 1],
+      [1.05, grasp(k), Q_SLOT, 0],
+      [1.4, above(k), Q_SLOT, 0],
+      [2.3, cupAbove, Q_UPRIGHT, 0],
+      [2.75, PEN_IN_CUP, Q_UPRIGHT, 0],
+      [2.95, PEN_IN_CUP, Q_UPRIGHT, 1],
+      [3.4, cupAbove, Q_UPRIGHT, 1],
+      [GAME_READY, readyGrip, Q_PEN, 1],
+    ];
+  }
   /** After the last card (times in seconds): fetch the pen and bring it to the start of the signature. */
   function penKeys(writeStartGrip) {
     return [
@@ -359,13 +377,24 @@ export function createRobotStage(items, cssScene) {
    * opts.seq: the timed ending, { t (seconds), writeStart: Vector3, write: { tip: Vector3, lift } | null, rest: 0..1 }
    *           positions in stage space; while seq.t > 0 it takes over from the cards.
    * opts.inspect: 0..1, how far the held card is brought out toward the camera
+   * opts.game: Tic-Tac-Toe, { t (seconds, 0..GAME_READY), k (the game's card), rest: pen tip waiting
+   *            by the board, write: { tip, lift } | null }, stage space; while t > 0 it takes over.
    */
-  function update(p, t, motion = true, { seq = null, inspect = 0 } = {}) {
+  function update(p, t, motion = true, { seq = null, inspect = 0, game = null } = {}) {
     const n = cards.length;
     let holdingPen = false;
     heldCard = -1;
 
-    if (!seq || seq.t <= 0) {
+    if (game && game.t > 0) {
+      sample(gameKeys(game.k, gripForTip(game.rest, 1)), game.t, pose);
+      if (game.t < 1.0) heldCard = game.k;      // released at 1.0–1.05: from then on it is in its slot
+      holdingPen = game.t > 2.85;
+      if (game.write && game.t >= GAME_READY) {
+        gripForTip(game.write.tip, game.write.lift, pose.attach);
+        pose.q.copy(Q_PEN);
+        pose.grip = 1;
+      }
+    } else if (!seq || seq.t <= 0) {
       const k = THREE.MathUtils.clamp(Math.floor(p + 0.5), 0, n - 1);
       const u = clamp01(p + 0.5 - k);
       sample(cardKeys(k), u, pose);
