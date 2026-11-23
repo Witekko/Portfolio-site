@@ -326,16 +326,23 @@ h2 { margin: 0; font-size: clamp(36px, 4.4vw, 64px); line-height: 1; letter-spac
 .built-go { margin-left: 4px; color: var(--hot); text-decoration: none; }
 @media (hover: hover) and (pointer: fine) { .built-go:hover { text-decoration: underline; } }
 
-/* Tic-Tac-Toe against the robot. */
-.ttt-ui { margin-top: 20px; }
-.ttt-ui .ttt-status, .ttt-ui .ttt-actions { display: none; }
-.ttt-ui.is-playing .ttt-play { display: none; }
-.ttt-ui.is-playing .ttt-status { display: block; margin: 0; min-height: 1.4em; font-size: 13px; color: var(--hot); }
-.ttt-ui.is-playing .ttt-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
-.ttt-ui kbd { font: inherit; font-size: 11px; color: var(--muted); margin-left: 6px; }
+/* Tic-Tac-Toe against the robot. The invitation in the copy steps back while you play;
+   the robot's lines and the buttons sit on the glass, under the board. */
+.ttt-ui { margin-top: 20px; transition: opacity 300ms var(--ease-out), transform 300ms var(--ease-out); }
+.project .copy > .ttt-ui.is-playing { opacity: 0; transform: translateY(6px); pointer-events: none; transition-duration: 200ms; }
+.project .copy:has(.ttt-ui.is-playing) > .peek { opacity: 0; transition: opacity 200ms var(--ease-out); }
+.ttt-hud { position: fixed; left: 0; top: 0; z-index: 5; display: grid; justify-items: center; gap: 12px; width: max-content; max-width: min(26rem, calc(100vw - 24px));
+  opacity: 0; pointer-events: none; will-change: transform; transition: opacity 180ms var(--ease-out); }
+.ttt-hud.is-on { opacity: 1; pointer-events: auto; transition-duration: 350ms; }
+.ttt-say { margin: 0; text-align: center; font-size: 13px; line-height: 1.45; color: #dbe5f7; transition: opacity 140ms var(--ease-out), filter 140ms var(--ease-out); }
+.ttt-say.is-swap { opacity: 0; filter: blur(2px); }
+.ttt-who { color: var(--hot); }
+.ttt-actions { display: flex; gap: 10px; }
+.ttt-actions .btn { min-height: 38px; padding: 0 16px; font-size: 14px; }
+.ttt-again { opacity: 0; transform: scale(.95); pointer-events: none; transition: opacity 250ms var(--ease-out), transform 250ms var(--ease-out); }
+.ttt-hud.is-ended .ttt-again { opacity: 1; transform: none; pointer-events: auto; }
+.ttt-hud kbd { font: inherit; font-size: 11px; color: var(--muted); margin-left: 6px; }
 body.is-ttt-pick { cursor: pointer; }
-.ttt-ui [hidden] { display: none; }   /* .btn sets display, so hidden needs help */
-.copy:has(.ttt-ui.is-playing) .peek { display: none; }
 
 /* Off hours: things to play with. */
 .off-hours h3 { margin: 0; font-size: clamp(30px, 3vw, 42px); font-weight: 600; letter-spacing: -.02em; }

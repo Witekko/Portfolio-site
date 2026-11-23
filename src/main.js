@@ -573,22 +573,36 @@ async function init() {
   const TTT_K = projectEls.findIndex((el) => el.id === 'p-ttt');
   let gameTarget = 0, gameT = 0, gamePending = false, gameLeaving = false, afterGame = null;
   const gameOn = () => gameTarget === 1 || gameT > 0;
-  let ttt = null, tttUi = null;
+  let ttt = null, tttUi = null, tttHud = null, tttSay = null, tttHudOn = false;
   const tttTip = new THREE.Vector3(-99, 0, 0);
   if (TTT_K >= 0 && !reduceMotion) {
+    // In the project's copy: just the invitation.
     tttUi = document.createElement('div');
     tttUi.className = 'ttt-ui';
-    tttUi.innerHTML = '<button type="button" class="btn btn-primary ttt-play">Play against the robot</button>'
-      + '<p class="ttt-status mono" aria-live="polite"></p>'
-      + '<div class="ttt-actions"><button type="button" class="btn btn-ghost ttt-again" hidden>Play again</button>'
-      + '<button type="button" class="btn btn-ghost ttt-stop">Stop <kbd>Esc</kbd></button></div>';
+    tttUi.innerHTML = '<button type="button" class="btn btn-primary ttt-play">Try to beat me</button>';
     const copy = projectEls[TTT_K].querySelector('.copy');
     copy.insertBefore(tttUi, copy.querySelector('.peek'));
-    const status = tttUi.querySelector('.ttt-status'), againBtn = tttUi.querySelector('.ttt-again');
-    ttt = createTicTacToe({ audio, onStatus: (text, ended) => { status.textContent = text; againBtn.hidden = !ended; } });
+    // On the glass, under the board: what the robot says, and the buttons.
+    tttHud = document.createElement('div');
+    tttHud.className = 'ttt-hud';
+    tttHud.innerHTML = '<p class="ttt-say mono" aria-live="polite"><span class="ttt-who">robot ›</span> <span class="ttt-line"></span></p>'
+      + '<div class="ttt-actions"><button type="button" class="btn btn-primary ttt-again" tabindex="-1">Rematch</button>'
+      + '<button type="button" class="btn btn-ghost ttt-stop">Stop <kbd>Esc</kbd></button></div>';
+    document.body.appendChild(tttHud);
+    tttSay = tttHud.querySelector('.ttt-line');
+    const againBtn = tttHud.querySelector('.ttt-again');
+    let sayTimer = 0;
+    ttt = createTicTacToe({ audio, small: isSmall(), onStatus: (text, ended) => {
+      // The old line blurs out, the new one comes in.
+      clearTimeout(sayTimer);
+      tttSay.parentNode.classList.add('is-swap');
+      sayTimer = setTimeout(() => { tttSay.textContent = text; tttSay.parentNode.classList.remove('is-swap'); }, 140);
+      tttHud.classList.toggle('is-ended', !!ended);
+      againBtn.tabIndex = ended ? 0 : -1;
+    } });
     robot.stage.add(ttt.group);
     tttUi.querySelector('.ttt-play').addEventListener('click', startGame);
-    tttUi.querySelector('.ttt-stop').addEventListener('click', () => stopGame());
+    tttHud.querySelector('.ttt-stop').addEventListener('click', () => stopGame());
     againBtn.addEventListener('click', () => ttt.again());
     addEventListener('keydown', (e) => { if (e.key === 'Escape' && gameTarget === 1) stopGame(); });
   }
@@ -605,7 +619,6 @@ async function init() {
     gamePending = false;
     if (!gameTarget || gameLeaving) return;
     gameLeaving = true;
-    tttUi.classList.remove('is-playing');
     if (ttt.state === 'off') gameTarget = 0;          // still fetching the pen: just turn back
     else ttt.finish(() => { gameTarget = 0; });        // pen back beside the board first, then leave
   }
@@ -833,8 +846,16 @@ async function init() {
       ttt.update(dt, gameTarget ? 1 : smoothstep(GAME_READY - 1.2, GAME_READY, gameT));
       if (was > 0 && gameT === 0 && !gameTarget) {   // back to presenting the card
         gameLeaving = false;
+        tttUi.classList.remove('is-playing');   // the invitation comes back once the card is back in hand
         syncScroll();
         if (afterGame) { const h = afterGame; afterGame = null; glideTo(h); history.replaceState(null, '', h); }
+      }
+      const hudOn = gameTarget === 1 && !gameLeaving && ['grid', 'you', 'think', 'placing', 'robot', 'end'].includes(ttt.state) && robot.stage.visible;
+      if (hudOn !== tttHudOn) { tttHudOn = hudOn; tttHud.classList.toggle('is-on', hudOn); }
+      if (hudOn || tttHud.classList.contains('is-on')) {
+        robot.stage.updateMatrixWorld();
+        const c = robot.stage.localToWorld(boardHit.copy(ttt.caption)).project(camera);
+        tttHud.style.transform = `translate(${((c.x + 1) / 2) * viewW()}px, ${((1 - c.y) / 2) * viewH()}px) translate(-50%, 0)`;
       }
       document.body.classList.toggle('is-ttt-pick', gameTarget === 1 && ttt.yourTurn && !isTouch && ttt.squareAt(boardPoint() ?? tttTip) >= 0);
     }
@@ -986,7 +1007,7 @@ async function init() {
     gate.leave(reduceMotion);
   });
   if (new URLSearchParams(location.search).has("about")) openAbout();   // debug: ?about=1
-  if (params.has('debug') || params.has('audiotest')) window.__debug = { THREE, robot, camera, audio, lenis, journey };   // for automated checks
+  if (params.has('debug') || params.has('audiotest')) window.__debug = { THREE, robot, camera, audio, lenis, journey, ttt };   // for automated checks
 }
 
 /** Without WebGL there are no cards to click: show each project's details right under it. */

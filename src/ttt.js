@@ -10,8 +10,8 @@
  */
 import * as THREE from 'three';
 
-const C = 0.5;                                               // one square
-const BOARD = new THREE.Vector3(-0.55, 0.35, 0.85);            // centre of the board, on the writing plane
+let C = 0.56;                                                // one square (smaller on phones)
+const BOARD = new THREE.Vector3(-0.6, 0.62, 0.85);           // centre of the board, on the writing plane
 const INK_Z = BOARD.z + 0.006;                               // the ink sits just in front of the pen tip
 const REST = new THREE.Vector3(BOARD.x + 1.9 * C, BOARD.y - 0.4 * C, BOARD.z);   // the pen waits here, lifted
 const LINES = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
@@ -97,12 +97,64 @@ function bestMove(b) {
   return moves[(Math.random() * moves.length) | 0];
 }
 
+/* ---------------------------------------------------------- trash talk -- */
+
+// Light trash talk from the robot. It never gets mean: it is a minimax, not a troll.
+const TALK = {
+  start: ['Your move. I have already seen how this ends.', 'Go on. Take your time, I have all of it.', 'Try to beat me. Many have tried.'],
+  think: ['Interesting choice.', 'Bold.', 'Hmm. Classic human move.', 'I saw that coming.', 'Oh, that one.', 'Calculating… done.'],
+  yours: ['Your move.', 'Your turn. No pressure.', 'Beep. Your move.', 'Go on.'],
+  blocked: ['Nice try. Blocked.', 'Not today.', 'I see you.'],
+  threat: ['Careful now.', 'Two in a row. Just saying.', 'Watch the corner.'],
+  win: ['Minimax 1, human 0. Rematch?', 'Told you. Again?', 'GG. The pen is mightier.'],
+  draw: ['A draw. Against me, that is a win. Respect.', 'Draw. Best you can do. Well played.'],
+  lost: ['Wait… that is not possible.'],
+};
+const say = (k) => TALK[k][(Math.random() * TALK[k].length) | 0];
+/** Two of one mark and an empty square in a line: the empty square, or -1. */
+function threat(b, who) {
+  for (const l of LINES) {
+    const v = l.map((i) => b[i]);
+    if (v.filter((x) => x === who).length === 2 && v.includes(null)) return l[v.indexOf(null)];
+  }
+  return -1;
+}
+
 /* ----------------------------------------------------------------- game -- */
 
-export function createTicTacToe({ onStatus = () => {}, audio = null } = {}) {
+export function createTicTacToe({ onStatus = () => {}, audio = null, small = false } = {}) {
+  if (small) {   // phones: the board sits above the copy, under the menu: a little smaller and lower
+    C = 0.5;
+    BOARD.set(-0.5, 0.465, BOARD.z);
+    REST.set(BOARD.x + 1.9 * C, BOARD.y - 0.4 * C, BOARD.z);
+  }
   const group = new THREE.Group();
   group.visible = false;
+  let glassIn = 0;   // the glass slides up into place before the board is drawn
   const tip = REST.clone();
+  const glass = (() => {
+    const W = 512, H = 640, cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const x = cv.getContext('2d');
+    const r = 36;
+    x.beginPath(); x.roundRect(6, 6, W - 12, H - 12, r);
+    x.fillStyle = 'rgba(150, 190, 255, 0.10)'; x.fill();
+    x.lineWidth = 4; x.strokeStyle = 'rgba(190, 215, 255, 0.55)'; x.stroke();
+    x.save(); x.clip();
+    const g = x.createLinearGradient(0, 0, W, H * 0.6);   // the sheen
+    g.addColorStop(0.18, 'rgba(255,255,255,0)'); g.addColorStop(0.3, 'rgba(255,255,255,0.13)');
+    g.addColorStop(0.36, 'rgba(255,255,255,0)'); g.addColorStop(0.44, 'rgba(255,255,255,0.06)'); g.addColorStop(0.5, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    x.restore();
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false });
+    // Taller than the board: the robot's lines are shown under it (main.js puts the text there).
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(C * 3.7, C * 3.7 * (H / W)), mat);
+    mesh.position.set(BOARD.x, BOARD.y - C * 3.7 * (H / W - 1) / 2, BOARD.z - 0.012);
+    mesh.renderOrder = 4;
+    return { mesh, mat };
+  })();
   let lift = 1, board = Array(9).fill(null), marks = [], grid = [], state = 'off', fade = 1;
   let steps = [], stepAt = 0, afterSteps = null, xAnim = null, thinkUntil = 0;
 
@@ -130,6 +182,7 @@ export function createTicTacToe({ onStatus = () => {}, audio = null } = {}) {
     afterSteps = then;
   }
 
+  group.add(glass.mesh);
   function add(stroke) { group.add(stroke.mesh); return stroke; }
   function clearMarks() {
     marks.forEach((m) => { group.remove(m.mesh); m.mesh.geometry.dispose(); m.mat.dispose(); });
@@ -149,20 +202,25 @@ export function createTicTacToe({ onStatus = () => {}, audio = null } = {}) {
     grid.forEach((g) => g.set(0));
     state = 'grid';
     onStatus('drawing the board…');
+    talkNext = say('start');
     schedule(() => { grid.forEach(drawFrom); travelFrom(REST); }, yourTurn);
   }
+  let talkNext = '';
   function yourTurn() {
     state = 'you';
-    onStatus('your move: click a square (you are X)');
+    onStatus(talkNext || say('yours'));
+    talkNext = '';
   }
   function robotTurn() {
     state = 'think';
-    onStatus('the robot is thinking…');
-    thinkUntil = performance.now() + 380;
+    onStatus(say('think'));
+    thinkUntil = performance.now() + 650;
   }
   function robotMove() {
+    const block = threat(board, 'X');
     const i = bestMove(board);
     board[i] = 'O';
+    talkNext = i === block ? say('blocked') : threat(board, 'O') >= 0 ? say('threat') : '';
     const o = add(makeStroke(circle(centre(i), C * 0.32), HOT, 0.022));
     marks.push(o);
     state = 'robot';
@@ -178,9 +236,9 @@ export function createTicTacToe({ onStatus = () => {}, audio = null } = {}) {
       const strike = add(makeStroke(line(a.clone().sub(dir), b.clone().add(dir)), HOT, 0.016));
       marks.push(strike);
       state = 'robot';
-      schedule(() => { drawFrom(strike); travelFrom(REST); }, () => end('the robot wins. Minimax does not forgive.'));
+      schedule(() => { drawFrom(strike); travelFrom(REST); }, () => end(say('win')));
       audio?.blip(392);
-    } else end(w.who === 'draw' ? 'a draw. Against minimax that is the best there is.' : 'you win! That should not be possible…');
+    } else end(say(w.who === 'draw' ? 'draw' : 'lost'));
     return true;
   }
   function end(text) {
@@ -199,16 +257,18 @@ export function createTicTacToe({ onStatus = () => {}, audio = null } = {}) {
     /** The arm is ready by the board: draw it (or just wait, if it is already there). */
     begin() {
       group.visible = true;
+      glassIn = 0;
       fade = 1;
-      group.children.forEach((m) => { m.material.opacity = 1; });
+      group.children.forEach((m) => { if (m !== glass.mesh) m.material.opacity = 1; });
       tip.copy(REST); lift = 1;
       clearMarks();
-      drawGrid();
+      state = 'glass';   // the glass settles first, then the pen starts
     },
     /** Start over on the same board. */
     again() {
       if (state !== 'end') return;
       clearMarks();
+      talkNext = say('start');
       yourTurn();
     },
     /** Put the pen back where the arm expects it, then call done (the arm then leaves). */
@@ -241,10 +301,13 @@ export function createTicTacToe({ onStatus = () => {}, audio = null } = {}) {
       const i = (1 - v) * 3 + (u + 1);
       return board[i] ? -1 : i;
     },
+    /** Where the robot's lines go: under the board, on the glass (stage space). */
+    caption: new THREE.Vector3(BOARD.x, BOARD.y - C * 1.75, BOARD.z),
     /** The board's plane in stage space (for picking). */
     plane: { point: BOARD, normal: new THREE.Vector3(0, 0, 1) },
     /** Every frame. visible01: how present the game is (fades the ink as the arm leaves). */
     update(dt, visible01) {
+      const dt0 = dt;
       // The pen's plan.
       while (steps.length && dt > 0) {
         const st = steps[0];
@@ -264,10 +327,17 @@ export function createTicTacToe({ onStatus = () => {}, audio = null } = {}) {
         if (k >= 1.6) { xAnim = null; if (!check()) robotTurn(); }
       }
       if (state === 'think' && performance.now() > thinkUntil) robotMove();
+      if (state === 'glass') {
+        glassIn = Math.min(1, glassIn + dt0 / 0.5);
+        if (glassIn >= 1) drawGrid();
+      }
+      const gi = ease(glassIn);
+      glass.mesh.position.y = BOARD.y - C * 3.7 * (640 / 512 - 1) / 2 - (1 - gi) * C * 0.4;
+      glass.mat.opacity = gi * fade;
       // Leaving: the ink fades with the arm.
       if (fade !== visible01) {
         fade = visible01;
-        group.children.forEach((m) => { m.material.opacity = fade; });
+        group.children.forEach((m) => { if (m !== glass.mesh) m.material.opacity = fade; });
         group.visible = fade > 0.01;
       }
     },
