@@ -20,6 +20,7 @@ import * as F from './formations.js';
 import { createRobotStage, SIGN_START, GAME_READY, CARD_SHOWN, FLOOR_Y, BASE } from './robot.js';
 import { createTicTacToe } from './ttt.js';
 import { createLineFollower } from './lf.js';
+import { track } from './consent.js';
 import { createDust, createFloor } from './world.js';
 import { createAudio } from './audio.js';
 import { createGate } from './gate.js';
@@ -227,7 +228,7 @@ async function init() {
   robot.stage.add(floor.points);
   // About as a ride around a brain-planet (not with reduced motion: there the plain chapters).
   let journey = null;
-  if (!reduceMotion) try { journey = createJourney({ small: isSmall(), audio, root: aboutEl, onFinish: () => closeAbout('#p-ike'), onCollect: () => renderSkills() }); } catch (err) { console.error('ride unavailable, plain About instead', err); }
+  if (!reduceMotion) try { journey = createJourney({ small: isSmall(), audio, root: aboutEl, onFinish: () => { track('ride_finish'); closeAbout('#p-ike'); }, onCollect: () => renderSkills() }); } catch (err) { console.error('ride unavailable, plain About instead', err); }
   if (journey) scene.add(journey.group);
   const veil = aboutEl.querySelector('.j-veil');
   const J_CUT = 0.42;            // About tween: before this the camera dives into the face, after it the ride
@@ -366,10 +367,13 @@ async function init() {
   const about = (aboutCtl = createAbout({ audio }));
   function openAbout() {
     if (aboutTarget === 1) return;
+    track('about_open');
+    try { localStorage.setItem(MET_KEY, '1'); } catch { /* private mode */ }
+    syncEnd();
     if (gameTarget === 1) stopGame();
     lastFocus = document.activeElement;
     aboutFrom = Math.round(fDisp);
-    portal = journey && fDisp > 1.5 && fDisp < LAST - 0.6 ? 'robot' : 'face';
+    portal = journey && fDisp > 1.5 ? 'robot' : 'face';   // past the head (projects, the business card): through the robot
     exitTo = null;
     aboutEl.hidden = false;
     if (journey) { aboutEl.classList.add('is-journey'); journey.enter(); } else about.open();
@@ -401,7 +405,7 @@ async function init() {
   document.querySelectorAll('[data-open-about]').forEach((el) => el.addEventListener('click', (e) => { e.preventDefault(); openAbout(); }));
   closeBtn.addEventListener('click', () => closeAbout());
   // Skip the ride: straight to the projects (through the robot, like the finish).
-  $('#j-skip')?.addEventListener('click', () => closeAbout('#p-ike'));
+  $('#j-skip')?.addEventListener('click', () => { track('ride_skip'); closeAbout('#p-ike'); });
   addEventListener('keydown', (e) => {
     if (aboutTarget !== 1) return;
     if (e.key === 'Escape') closeAbout();
@@ -599,7 +603,7 @@ async function init() {
       g.ui.innerHTML = `<button type="button" class="btn btn-primary ttt-play">${g.play}</button>`;
       const copy = projectEls[g.k].querySelector('.copy');
       copy.insertBefore(g.ui, copy.querySelector('.peek'));
-      g.game = g.make({ audio, small: isSmall(), onStatus: (text, ended) => {
+      g.game = g.make({ audio, small: isSmall(), onResult: (result) => track('game_result', { game: g.id.slice(2), result }), onStatus: (text, ended) => {
         if (ttt !== g.game) return;
         // The old line blurs out, the new one comes in.
         clearTimeout(sayTimer);
@@ -625,10 +629,37 @@ async function init() {
     addEventListener('pointercancel', toGame('up'));
     addEventListener('touchmove', (e) => { if (gameTarget === 1 && ttt?.drawing) e.preventDefault(); }, { passive: false });
   }
+  /** Phones: the board in the middle of the screen, as wide as it fits, its top under the menu. */
+  const fitNdc = new THREE.Vector2(), fitPlane = new THREE.Plane(), fitHit = new THREE.Vector3();
+  function fitBoard(game) {
+    if (!isSmall() || !game.place) return;
+    const z0 = robot.stage.position.z;
+    robot.stage.position.z = -0.85 * robot.stage.scale.z;   // where the stage stands during a game
+    robot.stage.updateMatrixWorld(true);
+    camera.updateMatrixWorld();
+    const pw = robot.stage.localToWorld(fitHit.set(0, 0, game.plane.point.z));
+    fitPlane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 0, 1), pw);
+    const at = (sx, sy) => {
+      fitNdc.set((sx / viewW()) * 2 - 1, -(sy / viewH()) * 2 + 1);
+      ray.setFromCamera(fitNdc, camera);
+      ray.ray.intersectPlane(fitPlane, fitHit);
+      return robot.stage.worldToLocal(fitHit.clone());
+    };
+    const w = viewW(), h = viewH();
+    const left = at(w * 0.04, h * 0.5), right = at(w * 0.96, h * 0.5);
+    const top = at(w / 2, 74), bottom = at(w / 2, h * 0.9);
+    const RATIO = 1.45;   // a taller glass than on desktop: room under the board for the robot's lines and the buttons
+    const c = Math.min((right.x - left.x) / 3.7, (top.y - bottom.y) / (3.7 * RATIO));
+    game.place((left.x + right.x) / 2, top.y - 1.85 * c, c, RATIO);
+    robot.stage.position.z = z0;
+    robot.stage.updateMatrixWorld(true);
+  }
   function startGame(g) {
     if (!g || gameOn()) return;
     if (inspectTarget === 1) closeInspect(true);
     ttt = g.game; tttUi = g.ui; TTT_K = g.k;
+    track('game_start', { game: g.id.slice(2) });
+    fitBoard(ttt);
     againBtn.textContent = g.again;
     measure();
     const y = centers[TTT_K + 1];   // the card is presented when its section is centred
@@ -668,13 +699,24 @@ async function init() {
   const forceScene = params.has('scene') ? Number(params.get('scene')) : null;   // debug: ?scene=3
   const start = performance.now() / 1000;
   let lastMotion = null, lastPen = { x: 0, y: 0 };
+  /* ---- The end: "Replay" for those who have met me (been in About), else an invitation to ---- */
+  const MET_KEY = 'wk-met';
+  function syncEnd() {
+    let met = false;
+    try { met = localStorage.getItem(MET_KEY) === '1'; } catch { /* private mode */ }
+    const meet = $('#end-meet'), rp = $('#replay');
+    if (meet) meet.hidden = met;
+    if (rp) rp.hidden = !met;
+  }
+  syncEnd();
+
   /* ---- Replay from the start (in Contact) ---- */
   let replay = null;
   const replayVeil = document.createElement('div');
   replayVeil.className = 'replay-veil';
   replayVeil.setAttribute('aria-hidden', 'true');
   document.body.appendChild(replayVeil);
-  $('#replay')?.addEventListener('click', () => { if (!replay && !reduceMotion) replay = { phase: 'stow', v: 0 }; else if (reduceMotion) { scrollTo(0, 0); } });
+  $('#replay')?.addEventListener('click', () => { if (!replay && !reduceMotion) { track('replay'); replay = { phase: 'stow', v: 0 }; } else if (reduceMotion) { scrollTo(0, 0); } });
   function restartFromTop() {
     if (lenis) lenis.scrollTo(0, { immediate: true, force: true }); else scrollTo(0, 0);
     seqT = 0; pArm = -0.5; jump = null; pDisp = -1; fDisp = 0; glideGoal = null;
@@ -818,15 +860,14 @@ async function init() {
     // Contact: the ending sequence plays on time once the last card is back in the magazine.
     const pNow = s - 1;
     const atContact = pNow > NP - 0.45 && pDisp > NP - 0.5 && (jump ? jump.phase === 'park' : pArm > NP - 0.55);
-    const SEQ_SIGNED = SIGN_START + 0.2 + penPlan.duration + 1.9;   // written, and the arm has folded away
-    const SEQ_END = SEQ_SIGNED + CARD_SHOWN + 0.6;                 // then: pen back, business card held up
+    const SEQ_END = CARD_SHOWN + 0.6;   // the business card, from its stand to held up
     if (reduceMotion) seqT = atContact ? SEQ_END : 0;
     else if (replay) {
       // Replay: the card goes back into its stand, the screen goes dark, the page is back at the
       // top in the dark, and the signature writes itself again.
       if (replay.phase === 'stow') {
-        seqT = Math.max(SEQ_SIGNED + 2.1, seqT - dt * 1.25);
-        if (seqT <= SEQ_SIGNED + 2.1) replay.phase = 'dark';
+        seqT = Math.max(0.9, seqT - dt * 1.1);   // back into its stand
+        if (seqT <= 0.9) replay.phase = 'dark';
       } else if (replay.phase === 'dark') {
         replay.v = Math.min(1, replay.v + dt / 0.55);
         if (replay.v >= 1) restartFromTop();
@@ -835,10 +876,10 @@ async function init() {
         if (replay.v <= 0) replay = null;
       }
       replayVeil.style.opacity = replay ? String(easeInOut(replay.v)) : '0';
-    } else seqT = atContact ? Math.min(SEQ_END, seqT + dt) : Math.max(0, seqT - dt * (seqT > SEQ_SIGNED ? 4 : 3));
+    } else seqT = atContact ? Math.min(SEQ_END, seqT + dt) : Math.max(0, seqT - dt * 2.5);
     const writeTime = seqT - SIGN_START - 0.2;
     const pen = penPlan.at(writeTime);
-    const ink = pen.ink;
+    const ink = 0;   // the signature no longer ends the page: the business card does
     // Done writing: the arm folds into a calm pose to the right, away from the signature.
     const rest = easeInOut(clamp01((writeTime - penPlan.duration - 0.25) / 1.6));
 
@@ -970,12 +1011,10 @@ async function init() {
       // Signing: the cell steps back so the arm writes from behind the signature (like on glass)
       // and its elbow folds away from the viewer instead of across the letters.
       // The game is drawn the same way, on glass in front of the arm.
-      robot.stage.position.z = -0.85 * robot.stage.scale.z * Math.max(smoothstep(0, SIGN_START - 0.8, seqT), smoothstep(1.2, GAME_READY - 0.4, gameT));
+      robot.stage.position.z = -0.85 * robot.stage.scale.z * smoothstep(1.2, GAME_READY - 0.4, gameT);
       points.updateMatrixWorld();
       robot.stage.updateMatrixWorld();
-      const writeStart = toStage(penPlan.start.x, penPlan.start.y, new THREE.Vector3());
-      const penWrite = seqT >= SIGN_START ? { tip: toStage(pen.x, pen.y, sigLocal), lift: pen.lift } : null;
-      robot.update(pArm, t, !reduceMotion, { seq: { t: seqT, writeStart, write: penWrite, rest, after: seqT - SEQ_SIGNED }, inspect: ie, fromK: jump && jump.phase !== 'stow' ? jump.from : null, game: gameT > 0 ? { t: gameT, k: TTT_K, rest: ttt.rest, write: ttt.pen() } : null });
+      robot.update(pArm, t, !reduceMotion, { seq: { t: seqT }, inspect: ie, fromK: jump && jump.phase !== 'stow' ? jump.from : null, game: gameT > 0 ? { t: gameT, k: TTT_K, rest: ttt.rest, write: ttt.pen() } : null });
     }
 
     // Hovering the presented card shows it can be clicked.
@@ -993,7 +1032,6 @@ async function init() {
     }
     lastMotion = mo;
     let scratch = entered && write > 0 && write < 1 ? 0.55 : 0;   // the intro signature
-    if (seqT >= SIGN_START && pen.lift < 0.3) scratch = Math.max(scratch, clamp01(Math.hypot(pen.x - lastPen.x, pen.y - lastPen.y) / Math.max(dt, 1e-3) / 0.9));
     lastPen = { x: pen.x, y: pen.y };
     if (ttt && gameT >= GAME_READY) {
       const pp = ttt.pen();

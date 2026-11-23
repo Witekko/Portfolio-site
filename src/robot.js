@@ -50,14 +50,15 @@ const REST_GRIP = new THREE.Vector3(1.0, -0.9 - ROD, 0.0);
 
 // Ending, on its own clock (seconds): to the cup, take the pen, bring it to the first stroke.
 export const SIGN_START = 3.3;
-// After the signature (seconds from when the arm has folded away): the pen back in the cup,
-// the business card from its stand, held up beside the signature.
-export const CARD_SHOWN = 5.0;
+// The ending (seconds from reaching Contact): the arm takes the business card from its stand
+// and holds it up, big: the last thing on the page.
+export const CARD_SHOWN = 3.0;
+const BC_SCALE = 1.6;   // it grows as it is lifted, to the size of a presented project card and a bit more
 const BC_W = 1.3, BC_H = 0.76;                                        // the business card
 const BC_TOP = new THREE.Vector3(-1.0, FLOOR_Y + 0.07 + BC_H, -0.5);  // its top edge, standing in the stand
 const Q_STAND = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.22, 0.35, 0, 'YXZ'));
-const BC_SHOW = new THREE.Vector3(0.25, -0.2, 1.25);                 // held up under the signature, toward the camera
-const Q_SHOW = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.06, -0.12, 0, 'YXZ'));
+const BC_SHOW = new THREE.Vector3(-0.1, 0.25 + (BC_SCALE * BC_H) / 2, 1.05);   // top edge; the card's centre sits where project cards are shown
+const Q_SHOW = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.03, -0.16, 0, 'YXZ'));
 // Tic-Tac-Toe, on its own clock (seconds): put the card back, take the pen, wait by the board.
 // Running the clock backwards plays it in reverse (pen back in the cup, card back in hand).
 export const GAME_READY = 4.3;
@@ -404,18 +405,14 @@ export function createRobotStage(items, cssScene) {
       [GAME_READY, readyGrip, Q_PEN, 1],
     ];
   }
-  /** After the signature (seconds from the folded pose): pen back, business card up. */
-  function afterKeys() {
+  /** The ending (seconds): from the last card's slot (or fromK) to the stand, the business card up. */
+  function endKeys(fromK = null) {
     return [
-      [0.0, REST_GRIP, Q_UPRIGHT, 1],
-      [1.0, cupAbove, Q_UPRIGHT, 1],
-      [1.45, PEN_IN_CUP, Q_UPRIGHT, 1],
-      [1.65, PEN_IN_CUP, Q_UPRIGHT, 0],
-      [2.1, cupAbove, Q_UPRIGHT, 0],
-      [2.9, bcAbove, Q_STAND, 0],
-      [3.3, BC_TOP, Q_STAND, 0],
-      [3.5, BC_TOP, Q_STAND, 1],
-      [3.9, bcAbove, Q_STAND, 1],
+      [0.0, fromK !== null ? aboveOr(fromK) : above(cards.length - 1), Q_SLOT, 0],
+      [0.9, bcAbove, Q_STAND, 0],
+      [1.3, BC_TOP, Q_STAND, 0],
+      [1.5, BC_TOP, Q_STAND, 1],
+      [1.9, bcAbove, Q_STAND, 1],
       [CARD_SHOWN, BC_SHOW, Q_SHOW, 1],
     ];
   }
@@ -451,8 +448,7 @@ export function createRobotStage(items, cssScene) {
 
   /**
    * p: project progress (0 = card 1 held up, 1 = card 2, …), driven by scroll.
-   * opts.seq: the timed ending, { t (seconds), writeStart: Vector3, write: { tip: Vector3, lift } | null, rest: 0..1,
-   *           after: seconds since the arm folded away (then: pen back, business card up) }
+   * opts.seq: the timed ending, { t (seconds) }: the business card from its stand, held up
    *           positions in stage space; while seq.t > 0 it takes over from the cards.
    * opts.inspect: 0..1, how far the held card is brought out toward the camera
    * opts.fromK: a jump: the arm comes to this card (or to the pen) from above slot fromK
@@ -462,7 +458,7 @@ export function createRobotStage(items, cssScene) {
    */
   function update(p, t, motion = true, { seq = null, inspect = 0, game = null, fromK = null } = {}) {
     const n = cards.length;
-    let holdingPen = false, holdingCard = false;
+    let holdingPen = false, holdingCard = false, cardGrow = 0;
     heldCard = -1;
 
     if (game && game.t > 0) {
@@ -492,24 +488,13 @@ export function createRobotStage(items, cssScene) {
         pose.q.slerp(Q_INSPECT, e);
       }
     } else {
-      const startGrip = gripForTip(seq.writeStart ?? new THREE.Vector3(0, 0, 0), 1);
-      sample(penKeys(startGrip, fromK), seq.t, pose);
-      holdingPen = seq.t > 1.55;
-      if (seq.write && seq.t >= SIGN_START) {
-        gripForTip(seq.write.tip, seq.write.lift, pose.attach);
-        pose.q.copy(Q_PEN);
-        pose.grip = 1;
-        if (seq.rest > 0) { pose.attach.lerp(REST_GRIP, seq.rest); pose.q.slerp(Q_UPRIGHT, seq.rest); }
-      }
-      if (seq.after > 0) {   // signed: the pen goes back, the business card comes up
-        sample(afterKeys(), seq.after, pose);
-        holdingPen = seq.after < 1.55;
-        holdingCard = seq.after > 3.45;
-        if (motion && seq.after > CARD_SHOWN) {   // held up: breathing, like a presented card
-          const b = clamp01(seq.after - CARD_SHOWN);
-          pose.attach.x += Math.sin(t * 1.1) * 0.015 * b;
-          pose.attach.y += Math.sin(t * 0.8) * 0.02 * b;
-        }
+      sample(endKeys(fromK), seq.t, pose);
+      holdingCard = seq.t > 1.45;
+      cardGrow = easeInOut(clamp01((seq.t - 1.6) / (CARD_SHOWN - 1.6)));
+      if (motion && seq.t > CARD_SHOWN) {   // held up: breathing, like a presented card
+        const b = clamp01(seq.t - CARD_SHOWN);
+        pose.attach.x += Math.sin(t * 1.1) * 0.015 * b;
+        pose.attach.y += Math.sin(t * 0.8) * 0.02 * b;
       }
     }
 
@@ -533,6 +518,7 @@ export function createRobotStage(items, cssScene) {
     // Pen
     if (holdingPen) { pen.position.copy(pose.attach); pen.quaternion.copy(pose.q); } else parkPen();
     if (holdingCard) { bcard.position.copy(pose.attach); bcard.quaternion.copy(pose.q); } else parkCardBC();
+    bcard.scale.setScalar(1 + (BC_SCALE - 1) * (holdingCard ? cardGrow : 0));
 
     // Cards: the held one follows the gripper and plays; the rest wait in their slots.
     cards.forEach((c, j) => {

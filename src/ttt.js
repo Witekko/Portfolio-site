@@ -72,12 +72,13 @@ const circle = (c, r, steps = 44) => Array.from({ length: steps + 1 }, (_, i) =>
  * width: its width; it is taller than wide and hangs below (x, y), the board's centre, so
  * there is room under the board for the robot's lines. Shared with the Line Follower game.
  */
-export function makeGlass(width, x, y, z) {
-  const W = 512, H = 640, cv = document.createElement('canvas');
+export function makeGlass(width, x, y, z, ratio = 1.25) {
+  const W = 512, H = Math.round(512 * ratio), cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
   const c = cv.getContext('2d');
   c.beginPath(); c.roundRect(6, 6, W - 12, H - 12, 36);
-  c.fillStyle = 'rgba(150, 190, 255, 0.10)'; c.fill();
+  c.fillStyle = 'rgba(8, 16, 38, 0.72)'; c.fill();   // smoked glass: what is behind it stays out of the way
+  c.fillStyle = 'rgba(150, 190, 255, 0.08)'; c.fill();
   c.lineWidth = 4; c.strokeStyle = 'rgba(190, 215, 255, 0.55)'; c.stroke();
   c.save(); c.clip();
   const g = c.createLinearGradient(0, 0, W, H * 0.6);   // the sheen
@@ -153,7 +154,7 @@ function threat(b, who) {
 
 /* ----------------------------------------------------------------- game -- */
 
-export function createTicTacToe({ onStatus = () => {}, audio = null, small = false } = {}) {
+export function createTicTacToe({ onStatus = () => {}, onResult = () => {}, audio = null, small = false } = {}) {
   if (small) {   // phones: the board sits above the copy, under the menu: a little smaller and lower
     C = 0.5;
     BOARD.set(-0.5, 0.465, BOARD.z);
@@ -163,7 +164,8 @@ export function createTicTacToe({ onStatus = () => {}, audio = null, small = fal
   group.visible = false;
   let glassIn = 0;   // the glass slides up into place before the board is drawn
   const tip = REST.clone();
-  const glass = makeGlass(C * 3.7, BOARD.x, BOARD.y, BOARD.z);
+  let glass = makeGlass(C * 3.7, BOARD.x, BOARD.y, BOARD.z);
+  const caption = new THREE.Vector3(BOARD.x, BOARD.y - C * 1.75, BOARD.z);
   let lift = 1, board = Array(9).fill(null), marks = [], grid = [], state = 'off', fade = 1;
   let steps = [], stepAt = 0, afterSteps = null, xAnim = null, thinkUntil = 0;
 
@@ -245,9 +247,9 @@ export function createTicTacToe({ onStatus = () => {}, audio = null, small = fal
       const strike = add(makeStroke(line(a.clone().sub(dir), b.clone().add(dir)), HOT, 0.016));
       marks.push(strike);
       state = 'robot';
-      schedule(() => { drawFrom(strike); travelFrom(REST); }, () => end(say('win')));
+      schedule(() => { drawFrom(strike); travelFrom(REST); }, () => { onResult('robot'); end(say('win')); });
       audio?.blip(392);
-    } else end(say(w.who === 'draw' ? 'draw' : 'lost'));
+    } else { onResult(w.who === 'draw' ? 'draw' : 'you'); end(say(w.who === 'draw' ? 'draw' : 'lost')); }
     return true;
   }
   function end(text) {
@@ -315,7 +317,22 @@ export function createTicTacToe({ onStatus = () => {}, audio = null, small = fal
       return board[i] ? -1 : i;
     },
     /** Where the robot's lines go: under the board, on the glass (stage space). */
-    caption: new THREE.Vector3(BOARD.x, BOARD.y - C * 1.75, BOARD.z),
+    caption,
+    /** One square (stage units). */
+    get size() { return C; },
+    /** Phones: put the board where it fits the screen (centre x, y and square size c, stage space). */
+    place(x, y, c, ratio = 1.25) {
+      C = c;
+      BOARD.set(x, y, BOARD.z);
+      REST.set(BOARD.x + 1.9 * C, BOARD.y - 0.4 * C, BOARD.z);
+      caption.set(BOARD.x, BOARD.y - C * 1.75, BOARD.z);
+      group.remove(glass.mesh); glass.mesh.geometry.dispose(); glass.mat.map?.dispose(); glass.mat.dispose();
+      glass = makeGlass(C * 3.7, BOARD.x, BOARD.y, BOARD.z, ratio);
+      group.add(glass.mesh);
+      grid.forEach((g) => { group.remove(g.mesh); g.mesh.geometry.dispose(); g.mat.dispose(); });
+      grid = [];   // redrawn at the new place
+      tip.copy(REST);
+    },
     /** The board's plane in stage space (for picking). */
     plane: { point: BOARD, normal: new THREE.Vector3(0, 0, 1) },
     /** Every frame. visible01: how present the game is (fades the ink as the arm leaves). */

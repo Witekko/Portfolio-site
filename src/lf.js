@@ -68,18 +68,19 @@ function buildCar() {
   return { g, eyes, led, mats: [] };
 }
 
-export function createLineFollower({ onStatus = () => {}, audio = null, small = false } = {}) {
+export function createLineFollower({ onStatus = () => {}, onResult = () => {}, audio = null, small = false } = {}) {
   // The board: the same glass as the Tic-Tac-Toe game, the same place.
-  const C = small ? 0.5 : 0.56;
+  let C = small ? 0.5 : 0.56;
   const BOARD = new THREE.Vector3(small ? -0.5 : -0.6, small ? 0.465 : 0.62, 0.85);
-  const HALF = C * 1.5;                                  // the drawing area is 3 squares wide
+  let HALF = C * 1.5;                                    // the drawing area is 3 squares wide
   const INK_Z = BOARD.z + 0.006;
   const REST = new THREE.Vector3(BOARD.x + 1.9 * C, BOARD.y - 0.4 * C, BOARD.z);
+  const caption = new THREE.Vector3(BOARD.x, BOARD.y - C * 1.75, BOARD.z);
   const inside = (p, m = 0) => Math.abs(p.x - BOARD.x) <= HALF + m && Math.abs(p.y - BOARD.y) <= HALF + m;
 
   const group = new THREE.Group();
   group.visible = false;
-  const glass = makeGlass(C * 3.7, BOARD.x, BOARD.y, BOARD.z);
+  let glass = makeGlass(C * 3.7, BOARD.x, BOARD.y, BOARD.z);
   group.add(glass.mesh);
 
   // The track: a ribbon that grows as you draw.
@@ -204,6 +205,7 @@ export function createLineFollower({ onStatus = () => {}, audio = null, small = 
     car.eyes.forEach((e) => e.material.color.setHex(0xffb27a));
   }
   function end(ok) {
+    onResult(ok ? 'finished' : 'lost');
     state = 'end';
     onStatus(say(ok ? TALK.done : TALK.lost), true);
     if (ok) audio?.finish(); else audio?.blip(330);
@@ -250,7 +252,20 @@ export function createLineFollower({ onStatus = () => {}, audio = null, small = 
     get state() { return state; },
     get showHud() { return ['draw', 'drawing', 'place', 'run', 'offline', 'park', 'end'].includes(state); },
     pen: () => ({ tip, lift }),
-    caption: new THREE.Vector3(BOARD.x, BOARD.y - C * 1.75, BOARD.z),
+    caption,
+    /** One square (stage units). */
+    get size() { return C; },
+    /** Phones: put the board where it fits the screen (centre x, y and square size c, stage space). */
+    place(x, y, c, ratio = 1.25) {
+      C = c; HALF = C * 1.5;
+      BOARD.set(x, y, BOARD.z);
+      REST.set(BOARD.x + 1.9 * C, BOARD.y - 0.4 * C, BOARD.z);
+      caption.set(BOARD.x, BOARD.y - C * 1.75, BOARD.z);
+      group.remove(glass.mesh); glass.mesh.geometry.dispose(); glass.mat.map?.dispose(); glass.mat.dispose();
+      glass = makeGlass(C * 3.7, BOARD.x, BOARD.y, BOARD.z, ratio);
+      group.add(glass.mesh);
+      tip.copy(REST); penTarget.copy(REST);
+    },
     plane: { point: BOARD, normal: new THREE.Vector3(0, 0, 1) },
     cursor(p) { return (state === 'draw' || state === 'end') && inside(p) ? 'draw' : ''; },
     begin() {

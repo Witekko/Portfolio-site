@@ -3,6 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Analytics: Google Tag Manager. Consent mode starts as "denied": nothing is stored
+       until the visitor accepts cookies (src/consent.js). -->
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('consent', 'default', {
+      ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied',
+      analytics_storage: (function () { try { return localStorage.getItem('wk-consent') === 'granted' ? 'granted' : 'denied'; } catch (e) { return 'denied'; } })(),
+      wait_for_update: 500
+    });
+    gtag('js', new Date());
+    dataLayer.push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
+  </script>
+  <script async src="https://www.googletagmanager.com/gtm.js?id=GTM-NC39D4F4"></script>
   <title>Witold Korzeniewski — Robotics → Machine Learning</title>
   <meta name="description" content="Automation & Robotics engineer and data analyst moving into machine learning. Portfolio of projects.">
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
@@ -209,7 +223,9 @@
           <a class="btn btn-primary" href="https://www.linkedin.com/in/witold-korzeniewski-64a56b27b/" rel="noopener">Message me on LinkedIn</a>
           <a class="btn btn-ghost" href="https://github.com/Witekko/" rel="noopener">GitHub</a>
         </div>
-        <button type="button" class="replay mono" id="replay">↺ Replay from the start</button>
+        <a class="btn btn-ghost end-meet" id="end-meet" href="#about" data-open-about hidden>Haven't met me yet? Ride through my head →</a>
+        <button type="button" class="replay mono" id="replay" hidden>↺ Replay from the start</button>
+        <p class="cookie-link mono"><a href="#" data-cookie-settings>Cookie settings</a></p>
       </div>
     </section>
   </main>
@@ -337,6 +353,16 @@
     </aside>
   </div>
 
+  <!-- Cookies: asks once, after the entrance -->
+  <div class="cookies" id="cookies" role="dialog" aria-labelledby="cookies-title" aria-describedby="cookies-text" hidden>
+    <p class="cookies-title mono" id="cookies-title">Cookies</p>
+    <p class="cookies-text" id="cookies-text">I use Google Analytics to see how people move through this page: which projects they open and whether they finish the ride. No ads, nothing sold.</p>
+    <div class="cookies-actions">
+      <button type="button" class="btn btn-primary" data-consent="yes">Accept</button>
+      <button type="button" class="btn btn-ghost" data-consent="no">Only necessary</button>
+    </div>
+  </div>
+  <script type="module" src="./src/consent.js"></script>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>
