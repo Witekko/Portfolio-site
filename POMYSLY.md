@@ -52,7 +52,7 @@ Z przeglądu animacji (skill improve-animations, Emil Kowalski) i uwag po przeje
 - [ ] Hasła namalowane na drodze, np. „11.84 s”, „50 respondents”, „FIFO”: krótkie, czytane w przejeździe.
 - [ ] Zapowiedź jazdy w hero: kawałek linii i robot czekający pod bramą START.
 - [ ] Jedna linijka „O mnie w 10 sekund” pod hero dla tych, którzy nie pojadą.
-- [ ] Kostka do kręcenia (sama się układa w 11,84 s) i gitara z prawdziwymi strunami, tam gdzie unoszą się ich myśli.
+- [x] Kostka i gitara w jeździe (decyzja po przeglądzie skillem find-animation-opportunities: bez zabawek do obsługi, tylko chwila przy przejeździe). Kostka zjeżdża obok robota, układa się w 5 ruchach, chwilę leci z nim i rozsypuje się. Gitara: drgające struny, cichy akord a-moll, nutki z cząstek.
 - [ ] Sprawdzić na prawdziwym gładziku i telefonie, czy gaz jest dobrze wyważony.
 
 ## Pomysły na kliknięcie w kartę

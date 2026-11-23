@@ -635,6 +635,19 @@ export function guitar(N) {
   ], { scale: 0.95 });
 }
 
+/** A music note (a quaver): a tilted oval head, a stem, a flag. Rises off the guitar. */
+export function musicNote(N) {
+  const c = Math.cos(-0.35), s = Math.sin(-0.35);
+  return build(N, [
+    { w: 0.45, fn: () => {   // the head, filled
+      const a = R() * TAU, r = Math.sqrt(R()), x = Math.cos(a) * 0.11 * r, y = Math.sin(a) * 0.075 * r;
+      return [x * c - y * s, -0.3 + x * s + y * c, jit(0.02), hot(1.0), 1];
+    } },
+    { w: 0.22, fn: () => [0.1 + jit(0.012), lerp(-0.28, 0.3, R()), jit(0.01), [1, 0.93, 0.86], 0.95] },   // stem
+    { w: 0.33, fn: () => { const t = R(); return [0.1 + 0.15 * Math.sin(t * 1.5) + jit(0.015), 0.3 - t * 0.32 + jit(0.015), jit(0.01), hot(0.85), 0.95]; } },   // flag
+  ]);
+}
+
 /** A Formula 1 car, three-quarter view: nose, sidepods, halo, wings, four wheels. */
 export function f1Car(N) {
   const wheels = [[-0.36, -0.2], [-0.36, 0.2], [0.34, -0.21], [0.34, 0.21]];

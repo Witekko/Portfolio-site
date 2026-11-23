@@ -252,6 +252,23 @@ export function createAudio() {
         o.connect(g).connect(n.sfx); o.start(t + d); o.stop(t + d + 0.55);
       });
     },
+    /** Passing under the guitar: one soft down-strum, A minor (the page's music sits on A). */
+    strum() {
+      if (!enabled) return;
+      const t = ctx.currentTime;
+      [110, 164.81, 220, 261.63, 329.63].forEach((fq, i) => {   // A2 E3 A3 C4 E4, low to high
+        const d = i * 0.022;
+        const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+        o.type = 'sawtooth'; o.frequency.value = fq;
+        f.type = 'lowpass'; f.Q.value = 0.7;
+        f.frequency.setValueAtTime(3200, t + d);   // bright at the pluck, then the string darkens
+        f.frequency.exponentialRampToValueAtTime(500, t + d + 0.5);
+        g.gain.setValueAtTime(0, t + d);
+        g.gain.linearRampToValueAtTime(0.022, t + d + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + d + 1.6);
+        o.connect(f).connect(g).connect(n.sfx); o.start(t + d); o.stop(t + d + 1.7);
+      });
+    },
     /** Crossing the finish line: a soft rising chord. */
     finish() {
       if (!enabled) return;

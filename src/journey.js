@@ -53,8 +53,8 @@ const CAMPUS = [
 const HOBBIES = [
   { s: 4.6, side: 0, lift: 1.9, scale: 1.1, make: F.f1Car, label: 'Formula 1 · lights out at the start', f1: true },
   { s: 11.0, side: 0, lift: 1.9, scale: 1.0, make: F.gamepad, label: 'Games · why I started making them' },
-  { s: 18.2, side: 0, lift: 1.9, scale: 0.9, make: F.rubiksCube, label: 'Speedcubing · 11.84 s single' },
-  { s: 25.4, side: 0, lift: 1.9, scale: 1.0, make: F.guitar, label: 'Guitar · the other evening project' },
+  { s: 18.2, side: 0, lift: 1.9, scale: 0.9, make: null, cube: true, label: 'Speedcubing · 11.84 s single' },
+  { s: 25.4, side: 0, lift: 1.9, scale: 1.0, make: F.guitar, guitar: true, label: 'Guitar · the other evening project' },
 ].map((h) => ({ ...h, s: h.s * K }));
 const ML_FROM = 31.0, ML_TO = 38.4;   // the dashed stretch: still being built (scaled where used)
 const GATE_AT = 1.6 * K;      // a gantry with the stop's name stands this far before it; you drive under it
@@ -590,6 +590,79 @@ function buildPad() {
   return { g, tex, mat };
 }
 
+/**
+ * A Rubik's cube that can solve itself: stickers as particles, each layer turn a real
+ * 90° rotation of the stickers in that layer. It starts scrambled by five turns and
+ * solves by playing them back. pose(k, p) writes the positions with turn k at p (0..1).
+ */
+const CUBE_MOVES = [[1, 1, 1], [0, -1, -1], [2, 1, 1], [1, -1, -1], [0, 1, 1]];   // [axis, layer, direction]
+function makeSolvableCube(N) {
+  const s = 0.16, half = 1.5 * s, SCALE = 1.25;
+  const faces = [
+    { n: [0, 0, 1], c: F.HOT }, { n: [0, 0, -1], c: F.blue(0.35) },
+    { n: [1, 0, 0], c: F.blue(0.95) }, { n: [-1, 0, 0], c: F.blue(0.6) },
+    { n: [0, 1, 0], c: [0.95, 0.97, 1.0] }, { n: [0, -1, 0], c: F.blue(0.45) },
+  ];
+  const solved = new Float32Array(N * 3), col = new Float32Array(N * 3), pos = new Float32Array(N * 4);
+  for (let i = 0; i < N; i++) {
+    const f = faces[i % 6], axis = f.n.findIndex((v) => v !== 0);
+    const others = [0, 1, 2].filter((k) => k !== axis);
+    const a = ((R() * 3) | 0) - 1, b = ((R() * 3) | 0) - 1;
+    const p = [0, 0, 0];
+    p[axis] = f.n[axis] * half;
+    p[others[0]] = a * s + (R() - 0.5) * s * 0.82;
+    p[others[1]] = b * s + (R() - 0.5) * s * 0.82;
+    solved.set(p, i * 3);
+    col.set(f.c, i * 3);
+    pos[i * 4 + 3] = 0.9;
+  }
+  const layerOf = (v) => (v > s * 0.5 ? 1 : v < -s * 0.5 ? -1 : 0);
+  const turn = (src, [axis, layer, dir], angle, mask, out) => {
+    const [u, w] = [0, 1, 2].filter((k) => k !== axis);
+    const c = Math.cos(angle * dir), sn = Math.sin(angle * dir);
+    out.set(src);
+    for (let i = 0; i < N; i++) {
+      if (!mask[i]) continue;
+      const pu = src[i * 3 + u], pw = src[i * 3 + w];
+      out[i * 3 + u] = pu * c - pw * sn;
+      out[i * 3 + w] = pu * sn + pw * c;
+    }
+    return out;
+  };
+  // states[k]: before turn k; states[M]: solved. Built backwards from solved.
+  const M = CUBE_MOVES.length, states = new Array(M + 1), masks = new Array(M);
+  states[M] = solved;
+  for (let k = M - 1; k >= 0; k--) {
+    const mv = CUBE_MOVES[k], next = states[k + 1];
+    masks[k] = new Uint8Array(N).map((_, i) => (layerOf(next[i * 3 + mv[0]]) === mv[1] ? 1 : 0));
+    states[k] = turn(next, mv, -Math.PI / 2, masks[k], new Float32Array(N * 3));
+  }
+  // How it is shown: tilted to show three faces (like the static cube), scaled.
+  const cx = Math.cos(0.45), sx = Math.sin(0.45), cy = Math.cos(0.6), sy = Math.sin(0.6);
+  const work = new Float32Array(N * 3);
+  const write = (src, attr) => {
+    for (let i = 0; i < N; i++) {
+      const x = src[i * 3], y = src[i * 3 + 1], z = src[i * 3 + 2];
+      const y1 = y * cx - z * sx, z1 = y * sx + z * cx;          // rotate about X
+      const x2 = x * cy + z1 * sy, z2 = -x * sy + z1 * cy;       // then about Y
+      attr[i * 3] = x2 * SCALE; attr[i * 3 + 1] = y1 * SCALE + 0.5; attr[i * 3 + 2] = z2 * SCALE;
+    }
+  };
+  // The form for buildStation (xyz + alpha, centred; buildStation adds the 0.5 lift itself).
+  write(states[0], work);
+  for (let i = 0; i < N; i++) { pos[i * 4] = work[i * 3]; pos[i * 4 + 1] = work[i * 3 + 1] - 0.5; pos[i * 4 + 2] = work[i * 3 + 2]; }
+  return {
+    form: { N, pos, col, rank: new Float32Array(N) },
+    moves: M,
+    /** Write the cube with turns 0..k-1 done and turn k at p (k = M: solved) into a position attribute. */
+    pose(k, p, attr) {
+      if (k >= M) write(states[M], attr.array);
+      else write(turn(states[k], CUBE_MOVES[k], (Math.PI / 2) * p, masks[k], work), attr.array);
+      attr.needsUpdate = true;
+    },
+  };
+}
+
 /* ---------------------------------------------------------------- robot -- */
 
 function buildRobot() {
@@ -704,16 +777,111 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
 
   // Props with a caption: the hobbies floating in the background (and, when switched on,
   // the project memories by the line). Hobbies turn slowly, like thoughts.
+  const solver = makeSolvableCube(small ? 3000 : 5500);
   const memories = [...HOBBIES, ...(SHOW.memories ? MEMORIES : [])].map((mem) => {
-    const { pts, uniforms } = buildStation(mem.make(small ? 3000 : 5500), mem.scale);
+    const { pts, uniforms } = buildStation(mem.cube ? solver.form : mem.make(small ? 3000 : 5500), mem.scale);
     const holder = new THREE.Group();
     const spin = new THREE.Group();
     spin.add(pts);
     holder.add(spin);
     placeOnPath(path, holder, mem.s, mem.side * (small ? 0.62 : 1), mem.lift);
     planet.add(holder);
-    return { ...mem, holder, spin, uniforms };
+    return { ...mem, holder, spin, pts, uniforms, home: holder.position.clone(), state: 'idle', at: 0 };
   });
+
+  // Two of the thoughts do something when you drive up to them (once per lap):
+  //  - the cube comes down beside the car, solves itself in the air, rides along for a
+  //    moment, then lets go and scatters;
+  //  - the guitar is strummed: the strings shake, a soft chord, a few notes float off it.
+  const cubeM = memories.find((m) => m.cube), guitarM = memories.find((m) => m.guitar);
+  const CUBE_AT = 3.0, CUBE_IN = 750, SOLVE_FROM = 600, TURN = 300, TURN_GAP = 60, CUBE_LET_GO = 4300, CUBE_OUT = 900;
+  const cubeTarget = new THREE.Vector3();
+  function resetCube() {
+    const m = cubeM;
+    m.state = 'idle';
+    m.holder.position.copy(m.home);
+    m.holder.visible = true;
+    m.spin.scale.setScalar(1);
+    m.turnShown = -1;
+    solver.pose(0, 0, m.pts.geometry.attributes.position);
+    m.tag.firstChild.textContent = m.label; m.tagW = 0;
+  }
+  function updateCube(now, t) {
+    const m = cubeM, ahead = m.s - s;
+    if (m.state === 'gone' && ahead > CUBE_AT + 1.2) resetCube();   // driven back well before it: it waits for you again
+    if (m.state === 'idle') {
+      if (phase === 'drive' && !leaving && ahead < CUBE_AT && ahead > 0.3) { m.state = 'ride'; m.at = now; m.turnShown = -1; }
+      else return;
+    }
+    if (m.state !== 'ride') return;
+    const e = now - m.at;
+    // Where it rides: up and to the right of the car, bobbing a little; it rises as it lets go.
+    const out = clamp01((e - CUBE_LET_GO) / CUBE_OUT);
+    cubeTarget.set(0.62, 0.36 + Math.sin(t * 2.2) * 0.025 + out * out * 0.35, -0.95);
+    planet.updateMatrixWorld(true);
+    planet.worldToLocal(cubeTarget);
+    const wIn = easeInOut(clamp01(e / CUBE_IN));
+    m.holder.position.lerpVectors(m.home, cubeTarget, wIn);
+    m.spin.scale.setScalar(1 - 0.58 * wIn);   // close to the camera it must not take over the screen
+    m.uniforms.uK.value = 1 - out;            // letting go: it scatters into particles
+    // The solve: one layer turn after another.
+    const ts = e - SOLVE_FROM, k = Math.floor(ts / (TURN + TURN_GAP));
+    if (ts >= 0 && k < solver.moves) {
+      const p = clamp01((ts - k * (TURN + TURN_GAP)) / TURN);
+      solver.pose(k, easeInOut(p), m.pts.geometry.attributes.position);
+    } else if (k >= solver.moves && m.turnShown !== solver.moves) {
+      m.turnShown = solver.moves;
+      solver.pose(solver.moves, 0, m.pts.geometry.attributes.position);
+      m.tag.firstChild.textContent = 'solved · my best single: 11.84 s'; m.tagW = 0;
+    }
+    if (out >= 1) { m.state = 'gone'; m.holder.visible = false; }
+  }
+
+  // The guitar's strings (picked out by their colour) and a few notes to let go.
+  const strings = [];
+  if (guitarM) {
+    const pa = guitarM.pts.geometry.attributes.position, ca = guitarM.pts.geometry.attributes.aCol;
+    for (let i = 0; i < pa.count; i++) {
+      if (ca.getX(i) > 0.94 && ca.getY(i) > 0.95 && ca.getZ(i) > 0.99) strings.push([i, pa.getX(i), pa.getY(i)]);
+    }
+  }
+  const notes = guitarM ? [0, 1, 2, 3].map((i) => {
+    const { pts, uniforms } = buildStation(F.musicNote(small ? 260 : 420), 0.42);
+    pts.visible = false;
+    guitarM.spin.add(pts);
+    return { pts, uniforms, side: i % 2 ? 1 : -1, delay: 120 + i * 170 };
+  }) : [];
+  const GUITAR_AT = 3.4, NOTE_LIFE = 1800;
+  function updateGuitar(now) {
+    const m = guitarM, ahead = m.s - s;
+    if (m.state === 'played' && ahead > GUITAR_AT + 1.2) m.state = 'idle';   // re-armed only well before the trigger point
+    if (m.state === 'idle' && phase === 'drive' && !leaving && ahead < GUITAR_AT && ahead > 0.6) {
+      m.state = 'played'; m.at = now;
+      audio?.strum();
+    }
+    if (m.state !== 'played') return;
+    const e = now - m.at;
+    // The strings shake and settle.
+    const pa = m.pts.geometry.attributes.position;
+    if (e < 1300 || m.stringsMoved) {
+      const amp = e < 1300 ? 0.016 * Math.exp(-e / 380) : 0;
+      strings.forEach(([i, x, y]) => pa.setX(i, x + amp * Math.sin(e * 0.09 + y * 40)));
+      pa.needsUpdate = true;
+      m.stringsMoved = e < 1300;
+    }
+    // A small bump, like it was hit.
+    m.spin.scale.setScalar(e < 240 ? 1 + 0.06 * Math.sin((e / 240) * Math.PI) : 1);
+    // Notes: rise out of the sound hole, drift apart, scatter.
+    notes.forEach((nt) => {
+      const te = e - nt.delay;
+      const on = te >= 0 && te < NOTE_LIFE;
+      nt.pts.visible = on;
+      if (!on) return;
+      const k = te / NOTE_LIFE;
+      nt.pts.position.set(nt.side * (0.12 + 0.5 * k) + Math.sin(te * 0.006 + nt.delay) * 0.04, 0.15 + 0.85 * (1 - (1 - k) ** 2), 0.06);
+      nt.uniforms.uK.value = smoothstep(0, 260, te) * (1 - smoothstep(NOTE_LIFE - 520, NOTE_LIFE, te));
+    });
+  }
   const arches = (SHOW.arches ? ARCHES : []).map((a) => {
     const arch = buildArch(a.cool);
     placeOnPath(path, arch.g, a.s, 0);
@@ -1007,11 +1175,16 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
       stars.uniforms.uSize.value = pxu * 0.05;
       stations.forEach((x) => { x.uniforms.uSize.value = pxu * 0.03; });
       memories.forEach((x) => { x.uniforms.uSize.value = pxu * 0.026; });
+      notes.forEach((x) => { x.uniforms.uSize.value = pxu * 0.022; });
       arches.forEach((x) => { x.uniforms.uSize.value = pxu * 0.03; });
     },
     /** Called when the About opens. The ride resumes where it was; the lights run once per visit. */
     enter() {
-      if (phase === 'finished' || s >= S_FIN) s = 0;   // a finished lap: back to the start (the skills stay collected)
+      if (phase === 'finished' || s >= S_FIN) {   // a finished lap: back to the start (the skills stay collected)
+        s = 0;
+        if (cubeM) resetCube();
+        if (guitarM) guitarM.state = 'idle';
+      }
       quickStart = store.get(LIGHTS_KEY) === '1';   // the start lights run once per visit
       armed = false;
       lastPush = performance.now();   // entering counts as scrolling: the gesture that opened the ride may still be going
@@ -1034,6 +1207,7 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
       if (phase !== 'finished') { phase = 'off'; v = 0; }   // over the finish line the robot rolls on while the camera rises
       keys.clear();
       hidePop();
+      if (cubeM?.state === 'ride') resetCube();
       lightsEl.classList.remove('is-on');
       toast.classList.remove('is-on');
       hud.classList.remove('is-in');
@@ -1153,6 +1327,8 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
       memories.forEach((m) => {
         m.uniforms.uK.value = smoothstep(m.s - 8 * K, m.s - 4 * K, s);
       });
+      if (cubeM) updateCube(now, t);
+      if (guitarM) updateGuitar(now);
       arches.forEach((a) => {
         a.uniforms.uTime.value = t;
         if (Math.abs(a.s - s) < 0.12 && now - a.firedAt > 1500) a.firedAt = now;
@@ -1238,8 +1414,10 @@ export function createJourney({ small = false, audio = null, root, onFinish = nu
         }
         const ahead = m.s - s;
         let op = memOn ? smoothstep(4.6, 3.2, ahead) * smoothstep(0.5, 1.3, ahead) : 0;   // gone before it passes the camera
+        if (m.state === 'ride') op = memOn ? 1 - clamp01((performance.now() - m.at - CUBE_LET_GO) / 400) : 0;   // it rides with you
+        if (m.state === 'gone') op = 0;
         if (op > 0) {
-          m.holder.localToWorld(tmp.set(0, (0.5 + 0.62) * m.scale, 0));
+          m.holder.localToWorld(tmp.set(0, (0.5 + 0.62) * m.scale * m.spin.scale.y, 0));
           if (blockedByPlanet(cam.position, tmp)) op = 0;
           else {
             tmp.project(cam);

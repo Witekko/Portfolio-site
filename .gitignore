@@ -3,3 +3,6 @@
 # CV with personal contact data: kept locally, never published.
 /Witold_Korzeniewski*CV*.pdf
 *CV*.pdf
+
+# Raw recordings (the cut, compressed clips live in assets/video/)
+/assets/VID_*.mp4
