@@ -50,6 +50,14 @@ const REST_GRIP = new THREE.Vector3(1.0, -0.9 - ROD, 0.0);
 
 // Ending, on its own clock (seconds): to the cup, take the pen, bring it to the first stroke.
 export const SIGN_START = 3.3;
+// After the signature (seconds from when the arm has folded away): the pen back in the cup,
+// the business card from its stand, held up beside the signature.
+export const CARD_SHOWN = 5.0;
+const BC_W = 1.3, BC_H = 0.76;                                        // the business card
+const BC_TOP = new THREE.Vector3(-1.0, FLOOR_Y + 0.07 + BC_H, -0.5);  // its top edge, standing in the stand
+const Q_STAND = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.22, 0.35, 0, 'YXZ'));
+const BC_SHOW = new THREE.Vector3(0.25, -0.2, 1.25);                 // held up under the signature, toward the camera
+const Q_SHOW = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.06, -0.12, 0, 'YXZ'));
 // Tic-Tac-Toe, on its own clock (seconds): put the card back, take the pen, wait by the board.
 // Running the clock backwards plays it in reverse (pen back in the cup, card back in hand).
 export const GAME_READY = 4.3;
@@ -222,6 +230,53 @@ function buildPen(stage) {
   return pen;
 }
 
+/** The business card and the little stand it waits in, next to the cup. Origin: its top edge. */
+function buildBusinessCard(stage) {
+  const stand = new THREE.Group();
+  const foot = m(new RoundedBoxGeometry(0.36, 0.05, 0.2, 2, 0.015), mat.dark);
+  foot.position.set(0, 0.025, 0);
+  const lip = m(new THREE.BoxGeometry(0.3, 0.012, 0.012), mat.hot);
+  lip.position.set(0, 0.055, 0.075);
+  stand.add(foot, lip);
+  stand.position.set(BC_TOP.x, FLOOR_Y, BC_TOP.z);
+  stand.rotation.y = 0.35;
+  stage.add(stand);
+
+  const W = 1024, H = Math.round(1024 * BC_H / BC_W), cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const draw = () => {
+    const c = cv.getContext('2d');
+    const css = getComputedStyle(document.documentElement);
+    const sans = css.getPropertyValue('--sans').trim() || 'system-ui, sans-serif';
+    const mono = css.getPropertyValue('--mono').trim() || 'monospace';
+    c.clearRect(0, 0, W, H);
+    c.fillStyle = '#0a1330'; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#ff8a3d'; c.fillRect(0, 0, 14, H);                 // the accent edge, like the site's cards
+    c.textBaseline = 'alphabetic';
+    c.fillStyle = '#ff8a3d'; c.font = `500 34px ${mono}`; c.fillText('wk_', 64, 92);
+    c.fillStyle = '#eef3ff'; c.font = `600 70px ${sans}`; c.fillText('Witold Korzeniewski', 64, 236);
+    c.fillStyle = '#c3d0e8'; c.font = `400 40px ${sans}`;
+    c.fillText('Industrial data engineer,', 64, 306);
+    c.fillText('moving into machine learning.', 64, 356);
+    c.fillStyle = '#93a6c8'; c.font = `500 30px ${mono}`;
+    c.fillText('Wrocław, Poland  ·  LinkedIn  ·  github.com/Witekko', 64, H - 56);
+    tex.needsUpdate = true;
+  };
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  const card = new THREE.Group();
+  const back = m(new RoundedBoxGeometry(BC_W + 0.03, BC_H + 0.03, 0.02, 2, 0.01), mat.cardBack);
+  back.position.y = -BC_H / 2;
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(BC_W, BC_H), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+  face.position.set(0, -BC_H / 2, 0.011);
+  card.add(back, face);
+  stage.add(card);
+  draw();
+  document.fonts?.ready.then(draw);   // the web fonts may arrive after the first draw
+  return card;
+}
+
 /* ------------------------------------------------------------------ cards -- */
 
 function buildCard(stage, cssScene, item, k) {
@@ -293,6 +348,10 @@ export function createRobotStage(items, cssScene) {
   const arm = buildArm(stage);
   buildMagazine(stage, items.length);
   const pen = buildPen(stage);
+  const bcard = buildBusinessCard(stage);
+  const parkCardBC = () => { bcard.position.copy(BC_TOP); bcard.quaternion.copy(Q_STAND); };
+  parkCardBC();
+  const bcAbove = BC_TOP.clone().add(new THREE.Vector3(0, 0.5, 0.08));
   const cards = items.map((item, k) => buildCard(stage, cssScene, item, k));
 
   const slotCenter = (k) => SLOT0.clone().add(new THREE.Vector3(0, k * 0.045, -k * SLOT_GAP));
@@ -345,6 +404,21 @@ export function createRobotStage(items, cssScene) {
       [GAME_READY, readyGrip, Q_PEN, 1],
     ];
   }
+  /** After the signature (seconds from the folded pose): pen back, business card up. */
+  function afterKeys() {
+    return [
+      [0.0, REST_GRIP, Q_UPRIGHT, 1],
+      [1.0, cupAbove, Q_UPRIGHT, 1],
+      [1.45, PEN_IN_CUP, Q_UPRIGHT, 1],
+      [1.65, PEN_IN_CUP, Q_UPRIGHT, 0],
+      [2.1, cupAbove, Q_UPRIGHT, 0],
+      [2.9, bcAbove, Q_STAND, 0],
+      [3.3, BC_TOP, Q_STAND, 0],
+      [3.5, BC_TOP, Q_STAND, 1],
+      [3.9, bcAbove, Q_STAND, 1],
+      [CARD_SHOWN, BC_SHOW, Q_SHOW, 1],
+    ];
+  }
   /** After the last card (times in seconds): fetch the pen and bring it to the start of the signature. */
   function penKeys(writeStartGrip, fromK = null) {
     return [
@@ -377,7 +451,8 @@ export function createRobotStage(items, cssScene) {
 
   /**
    * p: project progress (0 = card 1 held up, 1 = card 2, …), driven by scroll.
-   * opts.seq: the timed ending, { t (seconds), writeStart: Vector3, write: { tip: Vector3, lift } | null, rest: 0..1 }
+   * opts.seq: the timed ending, { t (seconds), writeStart: Vector3, write: { tip: Vector3, lift } | null, rest: 0..1,
+   *           after: seconds since the arm folded away (then: pen back, business card up) }
    *           positions in stage space; while seq.t > 0 it takes over from the cards.
    * opts.inspect: 0..1, how far the held card is brought out toward the camera
    * opts.fromK: a jump: the arm comes to this card (or to the pen) from above slot fromK
@@ -387,7 +462,7 @@ export function createRobotStage(items, cssScene) {
    */
   function update(p, t, motion = true, { seq = null, inspect = 0, game = null, fromK = null } = {}) {
     const n = cards.length;
-    let holdingPen = false;
+    let holdingPen = false, holdingCard = false;
     heldCard = -1;
 
     if (game && game.t > 0) {
@@ -426,6 +501,16 @@ export function createRobotStage(items, cssScene) {
         pose.grip = 1;
         if (seq.rest > 0) { pose.attach.lerp(REST_GRIP, seq.rest); pose.q.slerp(Q_UPRIGHT, seq.rest); }
       }
+      if (seq.after > 0) {   // signed: the pen goes back, the business card comes up
+        sample(afterKeys(), seq.after, pose);
+        holdingPen = seq.after < 1.55;
+        holdingCard = seq.after > 3.45;
+        if (motion && seq.after > CARD_SHOWN) {   // held up: breathing, like a presented card
+          const b = clamp01(seq.after - CARD_SHOWN);
+          pose.attach.x += Math.sin(t * 1.1) * 0.015 * b;
+          pose.attach.y += Math.sin(t * 0.8) * 0.02 * b;
+        }
+      }
     }
 
     // Gripper
@@ -447,6 +532,7 @@ export function createRobotStage(items, cssScene) {
 
     // Pen
     if (holdingPen) { pen.position.copy(pose.attach); pen.quaternion.copy(pose.q); } else parkPen();
+    if (holdingCard) { bcard.position.copy(pose.attach); bcard.quaternion.copy(pose.q); } else parkCardBC();
 
     // Cards: the held one follows the gripper and plays; the rest wait in their slots.
     cards.forEach((c, j) => {

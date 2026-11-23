@@ -17,7 +17,7 @@ import * as THREE from 'three';
 import Lenis from 'lenis';
 import { CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer.js';
 import * as F from './formations.js';
-import { createRobotStage, SIGN_START, GAME_READY, FLOOR_Y, BASE } from './robot.js';
+import { createRobotStage, SIGN_START, GAME_READY, CARD_SHOWN, FLOOR_Y, BASE } from './robot.js';
 import { createTicTacToe } from './ttt.js';
 import { createLineFollower } from './lf.js';
 import { createDust, createFloor } from './world.js';
@@ -668,6 +668,23 @@ async function init() {
   const forceScene = params.has('scene') ? Number(params.get('scene')) : null;   // debug: ?scene=3
   const start = performance.now() / 1000;
   let lastMotion = null, lastPen = { x: 0, y: 0 };
+  /* ---- Replay from the start (in Contact) ---- */
+  let replay = null;
+  const replayVeil = document.createElement('div');
+  replayVeil.className = 'replay-veil';
+  replayVeil.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(replayVeil);
+  $('#replay')?.addEventListener('click', () => { if (!replay && !reduceMotion) replay = { phase: 'stow', v: 0 }; else if (reduceMotion) { scrollTo(0, 0); } });
+  function restartFromTop() {
+    if (lenis) lenis.scrollTo(0, { immediate: true, force: true }); else scrollTo(0, 0);
+    seqT = 0; pArm = -0.5; jump = null; pDisp = -1; fDisp = 0; glideGoal = null;
+    introClock = 0; introSpeed = 1; introDone = false;
+    document.documentElement.classList.add('is-intro');
+    syncScroll();
+    replay.phase = 'light';
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+
   // The arm's own position in the story (pArm). It follows the scroll, except on far jumps.
   let pArm = -0.5, jump = null;
   let last = start, fDisp = 0, pDisp = -1, rotX = 0, rotY = 0, activeScene = -1, hintMode = '';
@@ -801,9 +818,24 @@ async function init() {
     // Contact: the ending sequence plays on time once the last card is back in the magazine.
     const pNow = s - 1;
     const atContact = pNow > NP - 0.45 && pDisp > NP - 0.5 && (jump ? jump.phase === 'park' : pArm > NP - 0.55);
-    const SEQ_END = SIGN_START + 0.2 + penPlan.duration + 2.2;   // write, then fold away
+    const SEQ_SIGNED = SIGN_START + 0.2 + penPlan.duration + 1.9;   // written, and the arm has folded away
+    const SEQ_END = SEQ_SIGNED + CARD_SHOWN + 0.6;                 // then: pen back, business card held up
     if (reduceMotion) seqT = atContact ? SEQ_END : 0;
-    else seqT = atContact ? Math.min(SEQ_END, seqT + dt) : Math.max(0, seqT - dt * 3);
+    else if (replay) {
+      // Replay: the card goes back into its stand, the screen goes dark, the page is back at the
+      // top in the dark, and the signature writes itself again.
+      if (replay.phase === 'stow') {
+        seqT = Math.max(SEQ_SIGNED + 2.1, seqT - dt * 1.25);
+        if (seqT <= SEQ_SIGNED + 2.1) replay.phase = 'dark';
+      } else if (replay.phase === 'dark') {
+        replay.v = Math.min(1, replay.v + dt / 0.55);
+        if (replay.v >= 1) restartFromTop();
+      } else {
+        replay.v = Math.max(0, replay.v - dt / 0.8);
+        if (replay.v <= 0) replay = null;
+      }
+      replayVeil.style.opacity = replay ? String(easeInOut(replay.v)) : '0';
+    } else seqT = atContact ? Math.min(SEQ_END, seqT + dt) : Math.max(0, seqT - dt * (seqT > SEQ_SIGNED ? 4 : 3));
     const writeTime = seqT - SIGN_START - 0.2;
     const pen = penPlan.at(writeTime);
     const ink = pen.ink;
@@ -943,7 +975,7 @@ async function init() {
       robot.stage.updateMatrixWorld();
       const writeStart = toStage(penPlan.start.x, penPlan.start.y, new THREE.Vector3());
       const penWrite = seqT >= SIGN_START ? { tip: toStage(pen.x, pen.y, sigLocal), lift: pen.lift } : null;
-      robot.update(pArm, t, !reduceMotion, { seq: { t: seqT, writeStart, write: penWrite, rest }, inspect: ie, fromK: jump && jump.phase !== 'stow' ? jump.from : null, game: gameT > 0 ? { t: gameT, k: TTT_K, rest: ttt.rest, write: ttt.pen() } : null });
+      robot.update(pArm, t, !reduceMotion, { seq: { t: seqT, writeStart, write: penWrite, rest, after: seqT - SEQ_SIGNED }, inspect: ie, fromK: jump && jump.phase !== 'stow' ? jump.from : null, game: gameT > 0 ? { t: gameT, k: TTT_K, rest: ttt.rest, write: ttt.pen() } : null });
     }
 
     // Hovering the presented card shows it can be clicked.
@@ -1073,7 +1105,7 @@ async function init() {
     gate.leave(reduceMotion);
   });
   if (new URLSearchParams(location.search).has("about")) openAbout();   // debug: ?about=1
-  if (params.has('debug') || params.has('audiotest')) window.__debug = { get jump() { return jump; }, get pArm() { return pArm; }, THREE, robot, camera, audio, lenis, journey, get ttt() { return ttt; }, games: GAMES };   // for automated checks
+  if (params.has('debug') || params.has('audiotest')) window.__debug = { get seqT() { return seqT; }, set seqT(v) { seqT = v; }, get jump() { return jump; }, get pArm() { return pArm; }, THREE, robot, camera, audio, lenis, journey, get ttt() { return ttt; }, games: GAMES };   // for automated checks
 }
 
 /** Without WebGL there are no cards to click: show each project's details right under it. */

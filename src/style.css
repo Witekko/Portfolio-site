@@ -346,6 +346,12 @@ body.is-ttt-pick { cursor: pointer; }
 body.is-game-draw { cursor: crosshair; }
 html.is-game, html.is-game body { touch-action: none; overscroll-behavior: none; }
 
+/* Contact: replay, and the dark it fades through. */
+.replay { margin-top: 22px; padding: 6px 0; font-size: 12px; color: var(--muted); background: none; border: 0; cursor: pointer; transition: color 160ms ease, transform 160ms var(--ease-out); }
+@media (hover: hover) and (pointer: fine) { .replay:hover { color: var(--ink); } }
+.replay:active { transform: scale(.97); }
+.replay-veil { position: fixed; inset: 0; z-index: 60; background: var(--bg); opacity: 0; pointer-events: none; }
+
 /* Off hours: things to play with. */
 .off-hours h3 { margin: 0; font-size: clamp(30px, 3vw, 42px); font-weight: 600; letter-spacing: -.02em; }
 .off-hours > p:not(.eyebrow) { margin: 14px 0 0; color: #c3d0e8; font-size: 17px; line-height: 1.6; }
