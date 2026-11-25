@@ -794,6 +794,7 @@ async function init() {
     if (pendingHash) { glideTo(pendingHash); pendingHash = null; }
   }
 
+  const tilt = { x: 0, y: 0 };   // the held card leaning toward the mouse (radians, smoothed)
   const cursor = createCursor();   // null on touch / reduced motion
   let gameCur = '';
   const cellA = new THREE.Vector3(), cellB = new THREE.Vector3();
@@ -1026,7 +1027,16 @@ async function init() {
       robot.stage.position.z = -0.85 * robot.stage.scale.z * smoothstep(1.2, GAME_READY - 0.4, gameT);
       points.updateMatrixWorld();
       robot.stage.updateMatrixWorld();
-      robot.update(pArm, t, !reduceMotion, { seq: { t: seqT }, inspect: ie, fromK: jump && jump.phase !== 'stow' ? jump.from : null, game: gameT > 0 ? { t: gameT, k: TTT_K, rest: ttt.rest, write: ttt.pen() } : null });
+      // The edge of the card under the mouse comes forward a few degrees (less on the business
+      // card: its links are small targets). Back to rest when the mouse leaves.
+      if (!isTouch && !reduceMotion) {
+        const bizUp = seqT > CARD_SHOWN - 0.3;
+        const on = pointerSeen && aboutT === 0 && !gameOn() && (bizUp || seqT === 0) ? robot.pointOnHeld(ndc, camera, bizUp) : null;
+        const amp = (bizUp ? 0.05 : 0.085) * (1 - 0.4 * ie), kt = 1 - Math.exp(-dt * 7);
+        tilt.x += ((on ? on.y * amp : 0) - tilt.x) * kt;
+        tilt.y += ((on ? -on.x * amp : 0) - tilt.y) * kt;
+      }
+      robot.update(pArm, t, !reduceMotion, { seq: { t: seqT }, tilt, inspect: ie, fromK: jump && jump.phase !== 'stow' ? jump.from : null, game: gameT > 0 ? { t: gameT, k: TTT_K, rest: ttt.rest, write: ttt.pen() } : null });
     }
 
     // Hovering the presented card shows it can be clicked.
@@ -1072,6 +1082,8 @@ async function init() {
             want = { mode: 'cell', x: ((cellA.x + 1) / 2) * viewW(), y: ((1 - cellA.y) / 2) * viewH(), size: ((cellB.x - cellA.x) / 2) * viewW() * 0.78 };
           }
         }
+      } else if (inspectTarget === 1) {   // beside the card and the panel (over the card it would cover what you read)
+        if (!robot.pointOnHeld(ndc, camera, false)) want = { mode: 'disc', label: 'close', pageOnly: true };
       } else if (cardLink) want = { mode: 'tag', label: 'open ↗' };
       else if (cardHover) want = { mode: 'disc', label: 'look closer' };
       else if (faceHover) want = { mode: 'disc', label: 'meet me' };

@@ -52,11 +52,11 @@ const REST_GRIP = new THREE.Vector3(1.0, -0.9 - ROD, 0.0);
 export const SIGN_START = 3.3;
 // The ending (seconds from reaching Contact): the arm takes the business card from its stand
 // and holds it up, big: the last thing on the page.
-export const CARD_SHOWN = 3.0;
+export const CARD_SHOWN = 3.4;
 const BC_SCALE = 1.6;   // it grows as it is lifted, to the size of a presented project card and a bit more
 const BC_W = 1.3, BC_H = 0.76;                                        // the business card
 const BC_TOP = new THREE.Vector3(-1.0, FLOOR_Y + 0.07 + BC_H, -0.5);  // its top edge, standing in the stand
-const Q_STAND = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.22, 0.35, 0, 'YXZ'));
+const Q_STAND = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.22, Math.PI + 0.35, 0, 'YXZ'));   // its back to the visitor
 const BC_SHOW = new THREE.Vector3(-0.1, 0.25 + (BC_SCALE * BC_H) / 2, 1.05);   // top edge; the card's centre sits where project cards are shown
 const Q_SHOW = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.03, -0.16, 0, 'YXZ'));
 // Tic-Tac-Toe, on its own clock (seconds): put the card back, take the pen, wait by the board.
@@ -294,7 +294,26 @@ function buildBusinessCard(stage) {
   back.position.y = -BC_H / 2;
   const face = new THREE.Mesh(new THREE.PlaneGeometry(BC_W, BC_H), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
   face.position.set(0, -BC_H / 2, 0.011);
-  card.add(back, face);
+  // The back: just the mark. The name is for the end.
+  const bv = document.createElement('canvas');
+  bv.width = W; bv.height = H;
+  const bt = new THREE.CanvasTexture(bv);
+  bt.colorSpace = THREE.SRGBColorSpace;
+  const drawBack = () => {
+    const c = bv.getContext('2d');
+    const mono = getComputedStyle(document.documentElement).getPropertyValue('--mono').trim() || 'monospace';
+    c.fillStyle = '#0a1330'; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#ff8a3d'; c.fillRect(W - 14, 0, 14, H);   // the same accent edge, seen from behind
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillStyle = 'rgba(255, 138, 61, 0.55)'; c.font = `500 120px ${mono}`; c.fillText('wk_', W / 2, H / 2);
+    bt.needsUpdate = true;
+  };
+  drawBack();
+  document.fonts?.ready.then(drawBack);
+  const rear = new THREE.Mesh(new THREE.PlaneGeometry(BC_W, BC_H), new THREE.MeshBasicMaterial({ map: bt, toneMapped: false }));
+  rear.position.set(0, -BC_H / 2, -0.011);
+  rear.rotation.y = Math.PI;
+  card.add(back, face, rear);
   stage.add(card);
   draw();
   document.fonts?.ready.then(draw);   // the web fonts may arrive after the first draw
@@ -475,6 +494,7 @@ export function createRobotStage(items, cssScene) {
     out.copy(tip).add(new THREE.Vector3(0, 0, -PEN_LIFT * lift)).addScaledVector(UP.clone().applyQuaternion(Q_PEN), PEN_TIP);
 
   const pose = { attach: new THREE.Vector3(), q: new THREE.Quaternion(), grip: 0 };
+  const tiltE = new THREE.Euler(), tiltQ = new THREE.Quaternion();
   const W = new THREE.Vector3(), tmpS = new THREE.Vector3(), tmpV = new THREE.Vector3();
   const raycaster = new THREE.Raycaster();
   let heldCard = -1;
@@ -484,12 +504,13 @@ export function createRobotStage(items, cssScene) {
    * opts.seq: the timed ending, { t (seconds) }: the business card from its stand, held up
    *           positions in stage space; while seq.t > 0 it takes over from the cards.
    * opts.inspect: 0..1, how far the held card is brought out toward the camera
+   * opts.tilt: { x, y } radians, how far the held card leans toward the mouse
    * opts.fromK: a jump: the arm comes to this card (or to the pen) from above slot fromK
    *             (-1: from rest), instead of from the card before it
    * opts.game: Tic-Tac-Toe, { t (seconds, 0..GAME_READY), k (the game's card), rest: pen tip waiting
    *            by the board, write: { tip, lift } | null }, stage space; while t > 0 it takes over.
    */
-  function update(p, t, motion = true, { seq = null, inspect = 0, game = null, fromK = null } = {}) {
+  function update(p, t, motion = true, { seq = null, inspect = 0, game = null, fromK = null, tilt = null } = {}) {
     const n = cards.length;
     let holdingPen = false, holdingCard = false, cardGrow = 0;
     heldCard = -1;
@@ -530,6 +551,8 @@ export function createRobotStage(items, cssScene) {
         pose.attach.y += Math.sin(t * 0.8) * 0.02 * b;
       }
     }
+
+    if (tilt && (heldCard >= 0 || holdingCard) && (tilt.x || tilt.y)) pose.q.multiply(tiltQ.setFromEuler(tiltE.set(tilt.x, tilt.y, 0)));
 
     // Gripper
     arm.tool.position.copy(pose.attach);
@@ -585,6 +608,14 @@ export function createRobotStage(items, cssScene) {
   /** World-space centre of a card (for the camera to frame it). */
   const cardCenterWorld = (k, out = new THREE.Vector3()) => cards[k].group.getWorldPosition(out);
 
+  /** Where the pointer is on the held card (or the business card): -1..1 from its centre, or null. */
+  function pointOnHeld(ndc, camera, business) {
+    const mesh = business ? bc.face : heldCard >= 0 ? cards[heldCard].face : null;
+    if (!mesh) return null;
+    raycaster.setFromCamera(ndc, camera);
+    const uv = raycaster.intersectObject(mesh, false)[0]?.uv;
+    return uv ? { x: uv.x * 2 - 1, y: uv.y * 2 - 1 } : null;
+  }
   /** The link on the business card under the pointer (highlights it), or null. */
   function pickCardLink(ndc, camera) {
     raycaster.setFromCamera(ndc, camera);
@@ -593,7 +624,7 @@ export function createRobotStage(items, cssScene) {
     bc.setHover(r ? bc.index(r) : -1);
     return r ? r.url : null;
   }
-  return { stage, update, syncCss, cards, pickHeld, pickCardLink, cardCenterWorld, held: () => heldCard, yaw: () => arm.turret.rotation.y,
+  return { stage, update, syncCss, cards, pickHeld, pickCardLink, pointOnHeld, cardCenterWorld, held: () => heldCard, yaw: () => arm.turret.rotation.y,
     /** For sound: where the gripper is, how the turret is turned, how closed the grip is. */
     motion: () => ({ x: arm.tool.position.x, y: arm.tool.position.y, z: arm.tool.position.z, yaw: arm.turret.rotation.y, grip: pose.grip }),
   };

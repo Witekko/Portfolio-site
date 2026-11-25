@@ -52,7 +52,7 @@ export function createCursor() {
   return {
     /**
      * want: what is under the mouse in the 3D scene, or null:
-     *   { mode: 'disc' | 'tag', label } · { mode: 'draw' } · { mode: 'cell', x, y, size } (screen px)
+     *   { mode: 'disc' | 'tag', label, pageOnly: not over text or panels } · { mode: 'draw' } · { mode: 'cell', x, y, size } (screen px)
      * quiet: no idle ring (the ride, the entrance).
      */
     update(dt, want, quiet = false) {
@@ -60,7 +60,7 @@ export function createCursor() {
       let next;
       if (!seen) next = '';
       else if (over === 'control') next = 'hot';          // page controls are on top of the scene
-      else if (want) next = want.mode === 'disc' && frameAvg > SLOW && !forceFull ? 'tag' : want.mode;
+      else if (want && !(want.pageOnly && over !== 'page')) next = want.mode === 'disc' && frameAvg > SLOW && !forceFull ? 'tag' : want.mode;
       else if (quiet || over === 'text' || performance.now() - movedAt > REST_MS) next = '';
       else next = 'idle';
 

@@ -475,6 +475,10 @@ html.is-game, html.is-game body { touch-action: none; overscroll-behavior: none;
   .hint { position: static; margin-top: 24px; }
   .project { min-height: 160svh; }
   .project .copy { top: auto; bottom: 16px; padding: 20px; margin-top: 52svh; border-radius: 16px; background: rgba(5, 11, 26, .82); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .contact .copy { padding: 20px; border-radius: 16px; background: rgba(5, 11, 26, .86); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .contact .actions .btn, .end-meet { padding: 0 16px; }
+  .contact .actions { flex-wrap: nowrap; gap: 10px; }
+  .contact .actions .btn { white-space: nowrap; }
   .about::before { width: 100%; background: linear-gradient(to bottom, transparent 20svh, rgba(5, 11, 26, .82) 48svh); }
   .about-inner { padding: 0 18px 14svh; }
   .chapter { justify-content: flex-end; padding-bottom: 8svh; }

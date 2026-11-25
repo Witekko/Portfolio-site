@@ -55,6 +55,14 @@ Z przeglądu animacji (skill improve-animations, Emil Kowalski) i uwag po przeje
 - [x] Kostka i gitara w jeździe (decyzja po przeglądzie skillem find-animation-opportunities: bez zabawek do obsługi, tylko chwila przy przejeździe). Kostka zjeżdża obok robota, układa się w 5 ruchach, chwilę leci z nim i rozsypuje się. Gitara: drgające struny, cichy akord a-moll, nutki z cząstek.
 - [ ] Sprawdzić na prawdziwym gładziku i telefonie, czy gaz jest dobrze wyważony.
 
+## Zamknięcie projektu (25.11.2026)
+
+- [x] **Koniec strony:** wizytówka zamiast podpisu. Przez projekty stoi tyłem (samo „wk_”), w Contact ramię ją bierze, odwraca i podaje dużą. LinkedIn i GitHub na karcie są klikalne. Kto nie był w „O mnie”, dostaje zaproszenie, reszta „Replay”.
+- [x] **Kursor, który zapowiada akcję** (`src/cursor.js`): „meet me”, „look closer”, „close” obok przybliżonej karty, „open ↗” na wizytówce, celownik i kółko w grach.
+- [x] **Karta odchyla się za kursorem,** gdy ramię ją trzyma.
+- [x] **Ciasteczka i Google Tag Manager** z trybem zgody (`src/consent.js`).
+- [x] **Dalekie skoki** (menu, pasek): ramię bierze od razu właściwą kartę.
+
 ## Pomysły na kliknięcie w kartę
 
 To alternatywa dla obecnego przybliżenia albo rozwinięcie go.
