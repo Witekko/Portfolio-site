@@ -21,6 +21,7 @@ import { createRobotStage, SIGN_START, GAME_READY, CARD_SHOWN, FLOOR_Y, BASE } f
 import { createTicTacToe } from './ttt.js';
 import { createLineFollower } from './lf.js';
 import { track } from './consent.js';
+import { createCursor } from './cursor.js';
 import { createDust, createFloor } from './world.js';
 import { createAudio } from './audio.js';
 import { createGate } from './gate.js';
@@ -793,6 +794,9 @@ async function init() {
     if (pendingHash) { glideTo(pendingHash); pendingHash = null; }
   }
 
+  const cursor = createCursor();   // null on touch / reduced motion
+  let gameCur = '';
+  const cellA = new THREE.Vector3(), cellB = new THREE.Vector3();
   let warmShown = -1, coolShown = -1;
   const offCard = new THREE.Vector2(9, 9);
   const faceTmp = new THREE.Vector3(), lookTmp = new THREE.Vector3(), lookFrom = new THREE.Vector3();
@@ -964,10 +968,13 @@ async function init() {
       if (hudOn !== tttHudOn) { tttHudOn = hudOn; tttHud.classList.toggle('is-on', hudOn); }
       if (hudOn || tttHud.classList.contains('is-on')) {
         robot.stage.updateMatrixWorld();
+        // The text stays inside the glass (3.7 squares wide), whatever the screen.
+        const gl = robot.stage.localToWorld(boardHit.copy(ttt.caption).setX(ttt.caption.x + ttt.size * 1.7)).project(camera).x;
         const c = robot.stage.localToWorld(boardHit.copy(ttt.caption)).project(camera);
+        tttHud.style.maxWidth = `${Math.round((gl - c.x) * viewW())}px`;
         tttHud.style.transform = `translate(${((c.x + 1) / 2) * viewW()}px, ${((1 - c.y) / 2) * viewH()}px) translate(-50%, 0)`;
       }
-      const cur = gameTarget === 1 && !isTouch ? ttt.cursor(boardPoint() ?? tttTip) : '';
+      const cur = gameCur = gameTarget === 1 && !isTouch ? ttt.cursor(boardPoint() ?? tttTip) : '';
       document.body.classList.toggle('is-ttt-pick', cur === 'pick');
       document.body.classList.toggle('is-game-draw', cur === 'draw' || (gameTarget === 1 && !!ttt.drawing));
     }
@@ -1051,6 +1058,25 @@ async function init() {
     const cardLink = robot.pickCardLink(overCard ? ndc : offCard, camera);   // off the card: clears the highlight
     document.body.classList.toggle('is-link-hover', !!cardLink);
     document.body.classList.toggle('is-card-hover', cardHover);
+
+    // The cursor says what a click would do.
+    if (cursor) {
+      let want = null;
+      if (gameOn()) {
+        if (gameTarget === 1 && (gameCur === 'draw' || ttt.drawing)) want = { mode: 'draw' };
+        else if (gameTarget === 1 && gameCur === 'pick') {
+          const bp = boardPoint(), c = bp && ttt.cellCentre(bp);
+          if (c) {   // snap into the square: its centre and size on screen
+            robot.stage.localToWorld(cellA.copy(c)).project(camera);
+            robot.stage.localToWorld(cellB.copy(c).setX(c.x + ttt.size)).project(camera);
+            want = { mode: 'cell', x: ((cellA.x + 1) / 2) * viewW(), y: ((1 - cellA.y) / 2) * viewH(), size: ((cellB.x - cellA.x) / 2) * viewW() * 0.78 };
+          }
+        }
+      } else if (cardLink) want = { mode: 'tag', label: 'open ↗' };
+      else if (cardHover) want = { mode: 'disc', label: 'look closer' };
+      else if (faceHover) want = { mode: 'disc', label: 'meet me' };
+      cursor.update(dt, want, jOn || !entered);
+    }
 
     // Camera: fly into the head when About opens; move in on the card when inspecting.
     const bump = reduceMotion ? 0 : Math.sin(Math.PI * aFx);

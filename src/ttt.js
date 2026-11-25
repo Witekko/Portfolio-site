@@ -309,6 +309,8 @@ export function createTicTacToe({ onStatus = () => {}, onResult = () => {}, audi
       state = 'placing';
       return true;
     },
+    /** The square under a board point: its centre (stage space), for the cursor. */
+    cellCentre(p) { const i = this.squareAt(p); return i < 0 ? null : centre(i); },
     /** Which square is under a board point (for the cursor), or -1. */
     squareAt(p) {
       const u = Math.round((p.x - BOARD.x) / C), v = Math.round((p.y - BOARD.y) / C);

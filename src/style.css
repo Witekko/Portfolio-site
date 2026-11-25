@@ -345,6 +345,27 @@ h2 { margin: 0; font-size: clamp(36px, 4.4vw, 64px); line-height: 1; letter-spac
 body.is-ttt-pick { cursor: pointer; }
 body.is-game-draw { cursor: crosshair; }
 body.is-link-hover { cursor: pointer; }
+
+/* The cursor companion (cursor.js). Moved every frame; its parts fade and scale. */
+.cur { position: fixed; left: 0; top: 0; z-index: 95; width: 0; height: 0; pointer-events: none; will-change: transform; }
+.cur > * { position: absolute; left: 0; top: 0; opacity: 0; transition: opacity 160ms var(--ease-out), transform 200ms var(--ease-out); }
+.cur-ring { width: 34px; height: 34px; margin: -17px; border: 1.5px solid rgba(255, 138, 61, .75); border-radius: 50%; transform: scale(.7); }
+.cur[data-mode="idle"] .cur-ring { opacity: .7; transform: none; }
+.cur[data-mode="hot"] .cur-ring { opacity: 1; transform: scale(1.3); }
+.cur-disc { display: grid; place-items: center; width: 116px; height: 116px; margin: -58px; border-radius: 50%; font-size: 13.5px; font-weight: 500; color: #fff; white-space: nowrap;
+  background: rgba(6, 12, 28, .84); border: 1.5px solid var(--hot); box-shadow: 0 8px 28px rgba(0, 0, 0, .4); transform: scale(.6); }
+.cur[data-mode="disc"] .cur-disc { opacity: 1; transform: none; }
+.cur.is-down .cur-disc, .cur.is-down[data-mode="disc"] .cur-disc { transform: scale(.94); }
+.cur-tag { padding: 5px 11px; border-radius: 999px; font-size: 13px; font-weight: 500; color: #fff; white-space: nowrap; background: rgba(6, 12, 28, .92); border: 1px solid var(--hot); transform: translate(-50%, 20px); }
+.cur[data-mode="tag"] .cur-tag { opacity: 1; transform: translate(-50%, 28px); }
+.cur-cell { border: 2px dashed rgba(188, 212, 255, .8); border-radius: 50%; transform: scale(.85); }
+.cur[data-mode="cell"] .cur-cell { opacity: 1; transform: none; }
+.cur-cross { width: 46px; height: 46px; margin: -23px; border-radius: 50%; border: 1.5px solid rgba(255, 138, 61, .85); transform: scale(.7);
+  background: linear-gradient(var(--hot), var(--hot)) 50% 0 / 1.5px 10px no-repeat, linear-gradient(var(--hot), var(--hot)) 50% 100% / 1.5px 10px no-repeat,
+    linear-gradient(var(--hot), var(--hot)) 0 50% / 10px 1.5px no-repeat, linear-gradient(var(--hot), var(--hot)) 100% 50% / 10px 1.5px no-repeat; }
+.cur[data-mode="draw"] .cur-cross { opacity: 1; transform: none; }
+.cur.is-down[data-mode="draw"] .cur-cross { transform: scale(.8); }
+html.cur-none, html.cur-none body { cursor: none; }
 @media (max-width: 860px) {
   /* Phones: while you play, the board has the screen; the project copy steps aside, the text wraps inside the glass. */
   html.is-game .project .copy { opacity: 0 !important; transition: opacity 300ms var(--ease-out); pointer-events: none; }
@@ -374,7 +395,12 @@ html.is-game, html.is-game body { touch-action: none; overscroll-behavior: none;
 .cookie-link { margin: 10px 0 0; font-size: 13px; }
 .cookie-link a { color: var(--muted); text-decoration: none; }
 @media (hover: hover) and (pointer: fine) { .cookie-link a:hover { color: var(--ink); text-decoration: underline; } }
-@media (max-width: 860px) { .cookies { left: 12px; right: 12px; bottom: 12px; width: auto; } }
+@media (max-width: 860px) {
+  .cookies { left: 12px; right: 12px; bottom: 12px; width: auto; padding: 12px 14px 14px; }
+  .cookies-title { display: none; }
+  .cookies-text { margin: 0; font-size: 14px; line-height: 1.45; }
+  .cookies-actions { margin-top: 10px; }
+}
 
 /* Off hours: things to play with. */
 .off-hours h3 { margin: 0; font-size: clamp(30px, 3vw, 42px); font-weight: 600; letter-spacing: -.02em; }
