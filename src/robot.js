@@ -55,7 +55,8 @@ export const SIGN_START = 3.3;
 export const CARD_SHOWN = 3.4;
 const BC_SCALE = 1.6;   // it grows as it is lifted, to the size of a presented project card and a bit more
 const BC_W = 1.3, BC_H = 0.76;                                        // the business card
-const BC_TOP = new THREE.Vector3(-1.0, FLOOR_Y + 0.07 + BC_H, -0.5);  // its top edge, standing in the stand
+const BC_REST = 0.78;   // smaller while it waits in its stand, so it stays clear of the cup and the magazine
+const BC_TOP = new THREE.Vector3(innerWidth <= 860 ? -1.02 : -1.25, FLOOR_Y + 0.07 + BC_H * BC_REST, -0.5);  // its top edge, standing in the stand
 const Q_STAND = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.22, Math.PI + 0.35, 0, 'YXZ'));   // its back to the visitor
 const BC_SHOW = new THREE.Vector3(-0.1, 0.25 + (BC_SCALE * BC_H) / 2, 1.05);   // top edge; the card's centre sits where project cards are shown
 const Q_SHOW = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.03, -0.16, 0, 'YXZ'));
@@ -259,7 +260,8 @@ function buildBusinessCard(stage) {
     const mono = css.getPropertyValue('--mono').trim() || 'monospace';
     c.clearRect(0, 0, W, H);
     c.fillStyle = '#0a1330'; c.fillRect(0, 0, W, H);
-    c.fillStyle = '#ff8a3d'; c.fillRect(0, 0, 14, H);                 // the accent edge, like the site's cards
+    c.lineWidth = 8; c.strokeStyle = 'rgba(140, 178, 255, 0.6)'; c.strokeRect(4, 4, W - 8, H - 8);   // the outline
+    c.fillStyle = '#ff8a3d'; c.fillRect(0, 0, 14, H);
     c.textBaseline = 'alphabetic';
     c.fillStyle = '#ff8a3d'; c.font = `500 34px ${mono}`; c.fillText('wk_', 64, 92);
     c.fillStyle = '#eef3ff'; c.font = `600 70px ${sans}`; c.fillText('Witold Korzeniewski', 64, 236);
@@ -293,7 +295,7 @@ function buildBusinessCard(stage) {
   const back = m(new RoundedBoxGeometry(BC_W + 0.03, BC_H + 0.03, 0.02, 2, 0.01), mat.cardBack);
   back.position.y = -BC_H / 2;
   const face = new THREE.Mesh(new THREE.PlaneGeometry(BC_W, BC_H), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
-  face.position.set(0, -BC_H / 2, 0.011);
+  face.position.set(0, -BC_H / 2, 0.018);
   // The back: just the mark. The name is for the end.
   const bv = document.createElement('canvas');
   bv.width = W; bv.height = H;
@@ -303,7 +305,8 @@ function buildBusinessCard(stage) {
     const c = bv.getContext('2d');
     const mono = getComputedStyle(document.documentElement).getPropertyValue('--mono').trim() || 'monospace';
     c.fillStyle = '#0a1330'; c.fillRect(0, 0, W, H);
-    c.fillStyle = '#ff8a3d'; c.fillRect(W - 14, 0, 14, H);   // the same accent edge, seen from behind
+    c.lineWidth = 8; c.strokeStyle = 'rgba(140, 178, 255, 0.6)'; c.strokeRect(4, 4, W - 8, H - 8);   // the outline
+    c.fillStyle = '#ff8a3d'; c.fillRect(W - 14, 0, 14, H);
     c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillStyle = 'rgba(255, 138, 61, 0.55)'; c.font = `500 120px ${mono}`; c.fillText('wk_', W / 2, H / 2);
     bt.needsUpdate = true;
@@ -311,7 +314,7 @@ function buildBusinessCard(stage) {
   drawBack();
   document.fonts?.ready.then(drawBack);
   const rear = new THREE.Mesh(new THREE.PlaneGeometry(BC_W, BC_H), new THREE.MeshBasicMaterial({ map: bt, toneMapped: false }));
-  rear.position.set(0, -BC_H / 2, -0.011);
+  rear.position.set(0, -BC_H / 2, -0.018);
   rear.rotation.y = Math.PI;
   card.add(back, face, rear);
   stage.add(card);
@@ -574,7 +577,7 @@ export function createRobotStage(items, cssScene) {
     // Pen
     if (holdingPen) { pen.position.copy(pose.attach); pen.quaternion.copy(pose.q); } else parkPen();
     if (holdingCard) { bcard.position.copy(pose.attach); bcard.quaternion.copy(pose.q); } else parkCardBC();
-    bcard.scale.setScalar(1 + (BC_SCALE - 1) * (holdingCard ? cardGrow : 0));
+    bcard.scale.setScalar(BC_REST + (BC_SCALE - BC_REST) * (holdingCard ? cardGrow : 0));
 
     // Cards: the held one follows the gripper and plays; the rest wait in their slots.
     cards.forEach((c, j) => {
